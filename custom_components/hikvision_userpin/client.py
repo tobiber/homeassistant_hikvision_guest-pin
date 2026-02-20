@@ -299,13 +299,12 @@ class HikvisionClient:
             "/ISAPI/AccessControl/UserInfo/Search?format=json", payload,
         )
         if not resp:
-            return []
+            raise ConnectionError("Device unreachable or returned error for user search")
         try:
             data = resp.json()
             return data.get("UserInfoSearch", {}).get("UserInfo", []) or []
         except ValueError:
-            _LOGGER.error("Hikvision search parse failed: %s", resp.text)
-            return []
+            raise ConnectionError(f"Invalid JSON from device: {resp.text[:200]}")
 
     def search_events(
         self,
@@ -345,13 +344,17 @@ class HikvisionClient:
 
         results: List[Dict[str, Any]] = []
         position = 0
+        first_request = True
         while True:
             payload["AcsEventCond"]["searchResultPosition"] = position
             resp = self._post_raw(
                 "/ISAPI/AccessControl/AcsEvent?format=json", payload,
             )
             if not resp:
+                if first_request:
+                    raise ConnectionError("Device unreachable or returned error for event search")
                 break
+            first_request = False
             try:
                 data = resp.json()
             except ValueError:

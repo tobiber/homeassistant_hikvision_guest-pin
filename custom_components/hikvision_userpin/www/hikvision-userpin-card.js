@@ -250,10 +250,12 @@ class HikvisionBaseCard extends HTMLElement {
       const q = this._config.entry_id
         ? `?entry_id=${encodeURIComponent(this._config.entry_id)}`
         : "";
-      this._data = await this._hass.callApi("GET", `hikvision_userpin/data${q}`);
+      const resp = await this._hass.callApi("GET", `hikvision_userpin/data${q}`);
+      if (resp && !resp.error) {
+        this._data = resp;
+      }
     } catch (err) {
-      console.error("hikvision-userpin: fetch error", err);
-      this._data = null;
+      console.warn("hikvision-userpin: fetch error, keeping previous data", err);
     }
     this._loading = false;
     this._render();
