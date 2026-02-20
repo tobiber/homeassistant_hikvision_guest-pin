@@ -16,7 +16,8 @@
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to the device. Please check URL and credentials.",
+      "cannot_connect": "Failed to connect to the device. Please check the URL.",
+      "invalid_auth": "Authentication failed. Please check username and password.",
       "unknown": "An unexpected error occurred."
     },
     "abort": {

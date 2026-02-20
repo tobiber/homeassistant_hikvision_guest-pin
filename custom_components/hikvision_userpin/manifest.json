@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "documentation": "https://github.com/",
   "requirements": ["requests", "qrcode", "Pillow"],
+  "dependencies": ["frontend", "http", "lovelace"],
   "codeowners": [],
   "config_flow": true,
   "iot_class": "local_polling"

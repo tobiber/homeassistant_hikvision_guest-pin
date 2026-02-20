@@ -16,7 +16,8 @@
       }
     },
     "error": {
-      "cannot_connect": "Verbindung zum Gerät fehlgeschlagen. Bitte URL und Zugangsdaten prüfen.",
+      "cannot_connect": "Verbindung zum Gerät fehlgeschlagen. Bitte URL prüfen.",
+      "invalid_auth": "Authentifizierung fehlgeschlagen. Bitte Benutzername und Passwort prüfen.",
       "unknown": "Ein unerwarteter Fehler ist aufgetreten."
     },
     "abort": {

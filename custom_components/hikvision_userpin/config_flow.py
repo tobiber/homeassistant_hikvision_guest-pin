@@ -64,15 +64,18 @@ class HikvisionUserPinConfigFlow(ConfigFlow, domain=DOMAIN):
                 timeout=DEFAULT_TIMEOUT,
             )
             try:
-                result = await self.hass.async_add_executor_job(
-                    client.search_users
+                status = await self.hass.async_add_executor_job(
+                    client.test_connection
                 )
-                if result is not None:
+                if status == "ok":
                     return self.async_create_entry(
                         title=user_input[CONF_BASE_URL],
                         data=user_input,
                     )
-                errors["base"] = "cannot_connect"
+                if status == "auth_failed":
+                    errors["base"] = "invalid_auth"
+                else:
+                    errors["base"] = "cannot_connect"
             except Exception:
                 _LOGGER.exception("Unexpected error during connection test")
                 errors["base"] = "unknown"

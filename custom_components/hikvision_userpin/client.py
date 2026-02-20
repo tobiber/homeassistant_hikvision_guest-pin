@@ -159,6 +159,35 @@ class HikvisionClient:
         self.verify = verify
         self.timeout = timeout
 
+    # -- Connection test ----------------------------------------------------
+
+    def test_connection(self) -> str:
+        """Test the connection and credentials. Returns 'ok', 'auth_failed', or 'cannot_connect'."""
+        url = f"{self.base_url}/ISAPI/AccessControl/UserInfo/Search?format=json"
+        payload = {
+            "UserInfoSearchCond": {
+                "searchID": "1",
+                "maxResults": 1,
+                "searchResultPosition": 0,
+            }
+        }
+        try:
+            resp = requests.post(
+                url,
+                json=payload,
+                auth=self.auth,
+                verify=self.verify,
+                timeout=self.timeout,
+                headers={"Content-Type": "application/json"},
+            )
+            if 200 <= resp.status_code < 300:
+                return "ok"
+            if resp.status_code == 401:
+                return "auth_failed"
+            return "cannot_connect"
+        except requests.RequestException:
+            return "cannot_connect"
+
     # -- Low-level helpers --------------------------------------------------
 
     def _post_raw(self, path: str, payload: Dict) -> Optional[requests.Response]:

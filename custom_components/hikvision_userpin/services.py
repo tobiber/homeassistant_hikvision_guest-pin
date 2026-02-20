@@ -151,29 +151,24 @@ async def async_handle_extend_user(hass: HomeAssistant, call: ServiceCall) -> No
 
 def async_register_services(hass: HomeAssistant) -> None:
     """Register all integration services."""
+
+    async def _handle_create(call: ServiceCall) -> None:
+        await async_handle_create_user(hass, call)
+
+    async def _handle_delete(call: ServiceCall) -> None:
+        await async_handle_delete_user(hass, call)
+
+    async def _handle_extend(call: ServiceCall) -> None:
+        await async_handle_extend_user(hass, call)
+
     hass.services.async_register(
-        DOMAIN,
-        SERVICE_CREATE_USER,
-        lambda call: hass.async_create_task(
-            async_handle_create_user(hass, call)
-        ),
-        schema=CREATE_USER_SCHEMA,
+        DOMAIN, SERVICE_CREATE_USER, _handle_create, schema=CREATE_USER_SCHEMA,
     )
     hass.services.async_register(
-        DOMAIN,
-        SERVICE_DELETE_USER,
-        lambda call: hass.async_create_task(
-            async_handle_delete_user(hass, call)
-        ),
-        schema=DELETE_USER_SCHEMA,
+        DOMAIN, SERVICE_DELETE_USER, _handle_delete, schema=DELETE_USER_SCHEMA,
     )
     hass.services.async_register(
-        DOMAIN,
-        SERVICE_EXTEND_USER,
-        lambda call: hass.async_create_task(
-            async_handle_extend_user(hass, call)
-        ),
-        schema=EXTEND_USER_SCHEMA,
+        DOMAIN, SERVICE_EXTEND_USER, _handle_extend, schema=EXTEND_USER_SCHEMA,
     )
 
 

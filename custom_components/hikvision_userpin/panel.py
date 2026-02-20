@@ -11,6 +11,7 @@ from urllib.parse import quote
 from aiohttp import web
 import jinja2
 
+from homeassistant.components.frontend import async_register_built_in_panel, async_remove_panel
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
@@ -311,6 +312,71 @@ class HikvisionExtendUserView(HomeAssistantView):
         raise web.HTTPFound(f"{PANEL_URL}/panel?entry_id={active_entry_id}")
 
 
+class HikvisionDataApiView(HomeAssistantView):
+    """JSON API returning users, events, and config for the Lovelace card."""
+
+    url = f"{PANEL_URL}/data"
+    name = "api:hikvision_userpin:data"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        hass: HomeAssistant = request.app["hass"]
+        entry_id = request.query.get("entry_id")
+        entry_info = _get_entry(hass, entry_id)
+        if not entry_info:
+            return web.json_response({"error": "No device configured"}, status=404)
+
+        active_entry_id, entry_data = entry_info
+        coordinator: HikvisionCoordinator = entry_data["coordinator"]
+
+        data = coordinator.data or {}
+        device_users = data.get("users", [])
+        device_events = data.get("events", [])
+        today = datetime.today().date().isoformat()
+
+        entries = {}
+        for eid, ed in _get_entries(hass).items():
+            cfg_entry = hass.config_entries.async_get_entry(eid)
+            entries[eid] = cfg_entry.title if cfg_entry else eid
+
+        protected = list(to_set(
+            (hass.config_entries.async_get_entry(active_entry_id).options or {}).get(
+                CONF_PROTECTED_EMPLOYEE_NOS, ""
+            )
+            if hass.config_entries.async_get_entry(active_entry_id)
+            else ""
+        ))
+
+        return web.json_response({
+            "entry_id": active_entry_id,
+            "entries": entries,
+            "users": device_users,
+            "events": device_events,
+            "protected": protected,
+            "today": today,
+        })
+
+
+class HikvisionQrBase64View(HomeAssistantView):
+    """Return a QR code as base64-encoded PNG JSON."""
+
+    url = f"{PANEL_URL}/qr/base64/{{value}}"
+    name = "api:hikvision_userpin:qr_base64"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        hass: HomeAssistant = request.app["hass"]
+        value = request.match_info["value"]
+        try:
+            qr_b64 = await hass.async_add_executor_job(qr_base64, value)
+        except Exception as exc:
+            _LOGGER.error("QR generation failed for %s: %s", value, exc)
+            return web.json_response(
+                {"error": f"QR generation failed: {exc}"}, status=500
+            )
+        return web.json_response({"qr_data": qr_b64})
+
+
 _VIEWS = [
     HikvisionPanelView,
     HikvisionAddUserView,
@@ -319,15 +385,21 @@ _VIEWS = [
     HikvisionQrPageView,
     HikvisionExtendPageView,
     HikvisionExtendUserView,
+    HikvisionDataApiView,
+    HikvisionQrBase64View,
 ]
 
 
-def async_register_panel(hass: HomeAssistant) -> None:
-    """Register HTTP views and sidebar panel."""
+def async_register_views(hass: HomeAssistant) -> None:
+    """Register all HTTP API views (called early in async_setup)."""
     for view_cls in _VIEWS:
         hass.http.register_view(view_cls())
 
-    hass.components.frontend.async_register_built_in_panel(
+
+def async_register_panel(hass: HomeAssistant) -> None:
+    """Register the sidebar panel (called from async_setup_entry)."""
+    async_register_built_in_panel(
+        hass,
         component_name="iframe",
         sidebar_title="Hikvision UserPin",
         sidebar_icon="mdi:door-closed-lock",
@@ -339,4 +411,4 @@ def async_register_panel(hass: HomeAssistant) -> None:
 
 def async_unregister_panel(hass: HomeAssistant) -> None:
     """Remove the sidebar panel."""
-    hass.components.frontend.async_remove_panel("hikvision-userpin")
+    async_remove_panel(hass, "hikvision-userpin")
