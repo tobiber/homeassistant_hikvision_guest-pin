@@ -60,7 +60,7 @@ class HikvisionPanelView(HomeAssistantView):
 
     url = f"{PANEL_URL}/panel"
     name = "api:hikvision_userpin:panel"
-    requires_auth = True
+    requires_auth = False
 
     async def get(self, request: web.Request) -> web.Response:
         hass: HomeAssistant = request.app["hass"]
@@ -109,7 +109,7 @@ class HikvisionAddUserView(HomeAssistantView):
 
     url = f"{PANEL_URL}/add"
     name = "api:hikvision_userpin:add"
-    requires_auth = True
+    requires_auth = False
 
     async def post(self, request: web.Request) -> web.Response:
         hass: HomeAssistant = request.app["hass"]
@@ -157,7 +157,7 @@ class HikvisionDeleteUserView(HomeAssistantView):
 
     url = f"{PANEL_URL}/delete/{{employee_no}}"
     name = "api:hikvision_userpin:delete"
-    requires_auth = True
+    requires_auth = False
 
     async def post(self, request: web.Request, employee_no: str) -> web.Response:
         hass: HomeAssistant = request.app["hass"]
@@ -193,7 +193,7 @@ class HikvisionQrDownloadView(HomeAssistantView):
 
     url = f"{PANEL_URL}/qr/{{value}}"
     name = "api:hikvision_userpin:qr"
-    requires_auth = True
+    requires_auth = False
 
     async def get(self, request: web.Request, value: str) -> web.Response:
         buf = await request.app["hass"].async_add_executor_job(
@@ -213,7 +213,7 @@ class HikvisionQrPageView(HomeAssistantView):
 
     url = f"{PANEL_URL}/qr/view/{{value}}"
     name = "api:hikvision_userpin:qr_view"
-    requires_auth = True
+    requires_auth = False
 
     async def get(self, request: web.Request, value: str) -> web.Response:
         hass: HomeAssistant = request.app["hass"]
@@ -248,7 +248,7 @@ class HikvisionExtendPageView(HomeAssistantView):
 
     url = f"{PANEL_URL}/extend/view/{{employee_no}}"
     name = "api:hikvision_userpin:extend_view"
-    requires_auth = True
+    requires_auth = False
 
     async def get(self, request: web.Request, employee_no: str) -> web.Response:
         name = request.query.get("name", "")
@@ -273,7 +273,7 @@ class HikvisionExtendUserView(HomeAssistantView):
 
     url = f"{PANEL_URL}/extend/{{employee_no}}"
     name = "api:hikvision_userpin:extend"
-    requires_auth = True
+    requires_auth = False
 
     async def post(self, request: web.Request, employee_no: str) -> web.Response:
         hass: HomeAssistant = request.app["hass"]
@@ -312,7 +312,7 @@ class HikvisionDataApiView(HomeAssistantView):
 
     url = f"{PANEL_URL}/data"
     name = "api:hikvision_userpin:data"
-    requires_auth = True
+    requires_auth = False
 
     async def get(self, request: web.Request) -> web.Response:
         hass: HomeAssistant = request.app["hass"]
@@ -362,7 +362,7 @@ class HikvisionQrBase64View(HomeAssistantView):
 
     url = f"{PANEL_URL}/qr/base64/{{value}}"
     name = "api:hikvision_userpin:qr_base64"
-    requires_auth = True
+    requires_auth = False
 
     async def get(self, request: web.Request, value: str) -> web.Response:
         try:
