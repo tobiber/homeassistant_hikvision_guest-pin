@@ -108,8 +108,9 @@ const SHARED_STYLES = `
   .btn-secondary:hover:not(:disabled) { opacity: 0.85; }
   .btn-danger { background: var(--error-color, #dc2626); color: #fff; border-color: var(--error-color, #dc2626); }
   .btn-danger:hover:not(:disabled) { opacity: 0.85; }
-  .btn-icon { padding: 0 8px; min-width: 44px; height: 44px; }
-  .btn-icon ha-icon { --mdc-icon-size: 20px; display: flex; }
+  .btn-icon { padding: 0; width: 32px; height: 32px; min-width: 32px; border-radius: 6px; }
+  .btn-icon ha-icon { --mdc-icon-size: 18px; display: flex; }
+  .date-cell { font-size: 12px; line-height: 1.5; white-space: nowrap; }
   .btn-full { width: 100%; margin-top: 12px; height: 44px; }
   .btn-full ha-icon { --mdc-icon-size: 18px; margin-right: 6px; }
   .protected-badge {
@@ -402,7 +403,7 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
 
         html += `<tr>
           <td>${_esc(u.name)}</td>
-          <td>${begin} – ${end}</td>
+          <td class="date-cell">${begin}<br>${end}</td>
           <td class="actions-cell">`;
 
         html += `<div class="actions">
