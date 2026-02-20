@@ -324,6 +324,9 @@ class HikvisionDataApiView(HomeAssistantView):
         active_entry_id, entry_data = entry_info
         coordinator: HikvisionCoordinator = entry_data["coordinator"]
 
+        if request.query.get("refresh") == "1":
+            await coordinator.async_refresh()
+
         data = coordinator.data or {}
         device_users = data.get("users", [])
         device_events = data.get("events", [])
@@ -342,7 +345,7 @@ class HikvisionDataApiView(HomeAssistantView):
             else ""
         ))
 
-        return self.json({
+        resp = self.json({
             "entry_id": active_entry_id,
             "entries": entries,
             "users": device_users,
@@ -350,6 +353,8 @@ class HikvisionDataApiView(HomeAssistantView):
             "protected": protected,
             "today": today,
         })
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
 
 
 class HikvisionQrBase64View(HomeAssistantView):

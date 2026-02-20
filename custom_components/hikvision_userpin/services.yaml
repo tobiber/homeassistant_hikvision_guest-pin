@@ -100,3 +100,26 @@ extend_user:
       required: true
       selector:
         date:
+
+deactivate_user:
+  name: Deactivate User
+  description: Deactivate a user by setting the end date to yesterday.
+  fields:
+    config_entry_id:
+      name: Config Entry ID
+      description: The config entry ID of the target device.
+      required: true
+      selector:
+        text:
+    employee_no:
+      name: Employee Number
+      description: The employee number (card ID) of the user to deactivate.
+      required: true
+      selector:
+        text:
+    begin_date:
+      name: Begin Date
+      description: Current validity start date (YYYY-MM-DD).
+      required: true
+      selector:
+        date:

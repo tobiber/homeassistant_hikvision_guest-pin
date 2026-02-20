@@ -155,9 +155,12 @@ class HikvisionClient:
         timeout: float = 8.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
-        self.auth = HTTPDigestAuth(username, password)
         self.verify = verify
         self.timeout = timeout
+        self._session = requests.Session()
+        self._session.auth = HTTPDigestAuth(username, password)
+        self._session.verify = verify
+        self._session.headers.update({"Content-Type": "application/json"})
 
     # -- Connection test ----------------------------------------------------
 
@@ -172,13 +175,8 @@ class HikvisionClient:
             }
         }
         try:
-            resp = requests.post(
-                url,
-                json=payload,
-                auth=self.auth,
-                verify=self.verify,
-                timeout=self.timeout,
-                headers={"Content-Type": "application/json"},
+            resp = self._session.post(
+                url, json=payload, timeout=self.timeout,
             )
             if 200 <= resp.status_code < 300:
                 return "ok"
@@ -193,13 +191,8 @@ class HikvisionClient:
     def _post_raw(self, path: str, payload: Dict) -> Optional[requests.Response]:
         url = f"{self.base_url}{path}"
         try:
-            resp = requests.post(
-                url,
-                json=payload,
-                auth=self.auth,
-                verify=self.verify,
-                timeout=self.timeout,
-                headers={"Content-Type": "application/json"},
+            resp = self._session.post(
+                url, json=payload, timeout=self.timeout,
             )
             if 200 <= resp.status_code < 300:
                 return resp
@@ -219,14 +212,8 @@ class HikvisionClient:
         """Try PUT then POST (or vice versa) — DRY helper for delete/modify."""
         for method in method_order:
             try:
-                resp = requests.request(
-                    method,
-                    url,
-                    json=payload,
-                    auth=self.auth,
-                    verify=self.verify,
-                    timeout=self.timeout,
-                    headers={"Content-Type": "application/json"},
+                resp = self._session.request(
+                    method, url, json=payload, timeout=self.timeout,
                 )
                 if 200 <= resp.status_code < 300:
                     return True

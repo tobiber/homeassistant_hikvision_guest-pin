@@ -77,6 +77,23 @@ function _esc(s) {
 const SHARED_STYLES = `
   :host { display: block; }
   ha-card { overflow: visible; }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px 0;
+  }
+  h1.title {
+    margin: 0; font-size: 1.2em; font-weight: 500;
+    color: var(--ha-card-header-color, var(--primary-text-color));
+  }
+  .btn-refresh {
+    background: none; border: none; cursor: pointer; padding: 6px;
+    color: var(--secondary-text-color, #888); border-radius: 50%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-refresh:active { background: var(--divider-color, #eee); }
+  .btn-refresh ha-icon { --mdc-icon-size: 22px; display: flex; }
+  .btn-refresh.spinning ha-icon { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .card-content { padding: 0 16px 16px; }
   .loading { color: var(--secondary-text-color, #888); font-style: italic; }
   h3 { margin: 16px 0 8px; font-size: 1.1em; color: var(--primary-text-color); }
@@ -106,6 +123,8 @@ const SHARED_STYLES = `
   .btn-primary:hover:not(:disabled) { opacity: 0.85; }
   .btn-secondary { background: var(--secondary-text-color, #374151); color: #fff; border-color: var(--secondary-text-color, #374151); }
   .btn-secondary:hover:not(:disabled) { opacity: 0.85; }
+  .btn-warning { background: var(--warning-color, #f59e0b); color: #fff; border-color: var(--warning-color, #f59e0b); }
+  .btn-warning:hover:not(:disabled) { opacity: 0.85; }
   .btn-danger { background: var(--error-color, #dc2626); color: #fff; border-color: var(--error-color, #dc2626); }
   .btn-danger:hover:not(:disabled) { opacity: 0.85; }
   .btn-icon { padding: 0; width: 32px; height: 32px; min-width: 32px; border-radius: 6px; }
@@ -243,13 +262,15 @@ class HikvisionBaseCard extends HTMLElement {
     return null;
   }
 
-  async _fetchData() {
+  async _fetchData(forceRefresh = false) {
     if (this._loading || !this._hass) return;
     this._loading = true;
     try {
-      const q = this._config.entry_id
-        ? `?entry_id=${encodeURIComponent(this._config.entry_id)}`
-        : "";
+      const params = new URLSearchParams();
+      if (this._config.entry_id) params.set("entry_id", this._config.entry_id);
+      if (forceRefresh) params.set("refresh", "1");
+      params.set("_t", Date.now());
+      const q = `?${params}`;
       const resp = await this._hass.callApi("GET", `hikvision_userpin/data${q}`);
       if (resp && !resp.error) {
         this._data = resp;
@@ -367,7 +388,11 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
 
     root.innerHTML = `
       <style>${SHARED_STYLES}${MODAL_STYLES}${this._extraStyles()}</style>
-      <ha-card header="${_esc(this._config.title || "Hikvision Benutzer")}">
+      <ha-card>
+        <div class="card-header">
+          <h1 class="title">${_esc(this._config.title || "Hikvision Benutzer")}</h1>
+          <button class="btn-refresh" id="btn-refresh" title="Aktualisieren"><ha-icon icon="mdi:refresh"></ha-icon></button>
+        </div>
         <div class="card-content">
           ${loading ? '<p class="loading">Laden…</p>' : ""}
           ${d ? this._renderContent(d) : loading ? "" : '<p class="loading">Keine Daten</p>'}
@@ -411,6 +436,7 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
         html += `<div class="actions">
             <button class="btn btn-icon btn-primary btn-qr" data-eno="${_esc(eno)}" data-name="${_esc(u.name)}" title="QR-Code"><ha-icon icon="mdi:qrcode"></ha-icon></button>
             <button class="btn btn-icon btn-primary btn-extend" data-eno="${_esc(eno)}" data-name="${_esc(u.name)}" data-begin="${begin}" data-end="${end}" title="Verlängern"><ha-icon icon="mdi:calendar-plus"></ha-icon></button>
+            <button class="btn btn-icon btn-warning btn-deactivate" data-eno="${_esc(eno)}" data-name="${_esc(u.name)}" data-begin="${begin}" title="Deaktivieren"><ha-icon icon="mdi:account-off"></ha-icon></button>
             <button class="btn btn-icon btn-danger btn-delete" data-eno="${_esc(eno)}" data-name="${_esc(u.name)}" title="Löschen"><ha-icon icon="mdi:delete"></ha-icon></button>
           </div>
           <div class="extend-form" id="extend-${_esc(eno)}" style="display:none;">
@@ -511,6 +537,15 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
     const root = this.shadowRoot;
     this._attachDeviceSelector();
 
+    /* Refresh – force device poll */
+    const btnRefresh = root.getElementById("btn-refresh");
+    if (btnRefresh) btnRefresh.addEventListener("click", async () => {
+      btnRefresh.classList.add("spinning");
+      this._loading = false;
+      await this._fetchData(true);
+      btnRefresh.classList.remove("spinning");
+    });
+
     /* Collapsible toggle */
     const toggleBtn = root.getElementById("toggle-create");
     const createBody = root.getElementById("create-body");
@@ -560,13 +595,27 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
       });
     });
 
+    /* Deactivate – PIN protected */
+    root.querySelectorAll(".btn-deactivate").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const eno = btn.dataset.eno;
+        const name = btn.dataset.name;
+        this._requirePin(() => {
+          if (!confirm(`Benutzer ${name} wirklich deaktivieren?`)) return;
+          this._callService("deactivate_user", {
+            config_entry_id: d.entry_id, employee_no: eno, begin_date: btn.dataset.begin,
+          });
+        });
+      });
+    });
+
     /* Delete – PIN protected */
     root.querySelectorAll(".btn-delete").forEach((btn) => {
       btn.addEventListener("click", () => {
         const eno = btn.dataset.eno;
         const name = btn.dataset.name;
         this._requirePin(() => {
-          if (!confirm(`Benutzer ${name} (${eno}) wirklich löschen?`)) return;
+          if (!confirm(`Benutzer ${name} wirklich löschen?`)) return;
           this._callService("delete_user", { config_entry_id: d.entry_id, employee_no: eno });
         });
       });

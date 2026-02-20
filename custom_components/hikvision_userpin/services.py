@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 import homeassistant.helpers.config_validation as cv
 
 from .client import (
@@ -25,6 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 SERVICE_CREATE_USER = "create_user"
 SERVICE_DELETE_USER = "delete_user"
 SERVICE_EXTEND_USER = "extend_user"
+SERVICE_DEACTIVATE_USER = "deactivate_user"
 
 CREATE_USER_SCHEMA = vol.Schema(
     {
@@ -50,6 +52,15 @@ EXTEND_USER_SCHEMA = vol.Schema(
         vol.Optional("duration", default="7d"): cv.string,
         vol.Required("begin_date"): cv.string,
         vol.Required("current_end"): cv.string,
+    }
+)
+
+
+DEACTIVATE_USER_SCHEMA = vol.Schema(
+    {
+        vol.Required("config_entry_id"): cv.string,
+        vol.Required("employee_no"): cv.string,
+        vol.Required("begin_date"): cv.string,
     }
 )
 
@@ -112,11 +123,10 @@ async def async_handle_delete_user(hass: HomeAssistant, call: ServiceCall) -> No
     employee_no = data["employee_no"]
 
     success = await hass.async_add_executor_job(client.delete_user, employee_no)
-    if success:
-        _LOGGER.info("Deleted user %s from device", employee_no)
-    else:
-        _LOGGER.error("Failed to delete user %s from device", employee_no)
+    if not success:
+        raise HomeAssistantError(f"Benutzer {employee_no} konnte nicht gelöscht werden")
 
+    _LOGGER.info("Deleted user %s from device", employee_no)
     await coordinator.async_request_refresh()
 
 
@@ -139,13 +149,31 @@ async def async_handle_extend_user(hass: HomeAssistant, call: ServiceCall) -> No
     success = await hass.async_add_executor_job(
         client.update_validity, employee_no, begin_date, new_end_str,
     )
-    if success:
-        _LOGGER.info(
-            "Extended user %s validity to %s", employee_no, new_end_str,
-        )
-    else:
-        _LOGGER.error("Failed to extend user %s", employee_no)
+    if not success:
+        raise HomeAssistantError(f"Benutzer {employee_no} konnte nicht verlängert werden")
 
+    _LOGGER.info("Extended user %s validity to %s", employee_no, new_end_str)
+    await coordinator.async_request_refresh()
+
+
+async def async_handle_deactivate_user(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Handle the deactivate_user service call."""
+    data = call.data
+    entry_data = _get_entry_data(hass, data["config_entry_id"])
+    client: HikvisionClient = entry_data["client"]
+    coordinator: HikvisionCoordinator = entry_data["coordinator"]
+
+    employee_no = data["employee_no"]
+    begin_date = data["begin_date"]
+    yesterday = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    success = await hass.async_add_executor_job(
+        client.update_validity, employee_no, begin_date, yesterday,
+    )
+    if not success:
+        raise HomeAssistantError(f"Benutzer {employee_no} konnte nicht deaktiviert werden")
+
+    _LOGGER.info("Deactivated user %s (end set to %s)", employee_no, yesterday)
     await coordinator.async_request_refresh()
 
 
@@ -161,6 +189,9 @@ def async_register_services(hass: HomeAssistant) -> None:
     async def _handle_extend(call: ServiceCall) -> None:
         await async_handle_extend_user(hass, call)
 
+    async def _handle_deactivate(call: ServiceCall) -> None:
+        await async_handle_deactivate_user(hass, call)
+
     hass.services.async_register(
         DOMAIN, SERVICE_CREATE_USER, _handle_create, schema=CREATE_USER_SCHEMA,
     )
@@ -170,6 +201,9 @@ def async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, SERVICE_EXTEND_USER, _handle_extend, schema=EXTEND_USER_SCHEMA,
     )
+    hass.services.async_register(
+        DOMAIN, SERVICE_DEACTIVATE_USER, _handle_deactivate, schema=DEACTIVATE_USER_SCHEMA,
+    )
 
 
 def async_unregister_services(hass: HomeAssistant) -> None:
@@ -177,3 +211,4 @@ def async_unregister_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, SERVICE_CREATE_USER)
     hass.services.async_remove(DOMAIN, SERVICE_DELETE_USER)
     hass.services.async_remove(DOMAIN, SERVICE_EXTEND_USER)
+    hass.services.async_remove(DOMAIN, SERVICE_DEACTIVATE_USER)
