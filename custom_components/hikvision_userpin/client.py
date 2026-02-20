@@ -66,21 +66,22 @@ def compute_end_date(
             return parse_date(custom_end)
         except ValueError:
             pass
+    # End date is inclusive (endTime gets 23:59:59), so "1d" = same day as start.
     mapping = {
-        "1d": timedelta(days=1),
-        "7d": timedelta(days=7),
-        "14d": timedelta(days=14),
-        "4w": timedelta(days=28),
+        "1d": timedelta(days=0),
+        "7d": timedelta(days=6),
+        "14d": timedelta(days=13),
+        "4w": timedelta(days=27),
     }
     if dur in mapping:
         return start + mapping[dur]
     if dur == "3m":
-        return add_months(start, 3)
+        return add_months(start, 3) - timedelta(days=1)
     if dur == "12m":
-        return add_months(start, 12)
+        return add_months(start, 12) - timedelta(days=1)
     if dur == "forever":
         return datetime(2099, 12, 31)
-    return start + timedelta(days=7)
+    return start + timedelta(days=6)
 
 
 def generate_card_id(length: int = 12) -> str:

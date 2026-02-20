@@ -290,7 +290,8 @@ class HikvisionBaseCard extends HTMLElement {
       return;
     }
     await new Promise((r) => setTimeout(r, 2000));
-    await this._fetchData();
+    this._loading = false;
+    await this._fetchData(true);
   }
 
   _renderDeviceSelector(d) {
