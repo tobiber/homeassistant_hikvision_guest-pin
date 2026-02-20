@@ -1,0 +1,10 @@
+{
+  "domain": "hikvision_userpin",
+  "name": "Hikvision User & PIN Control",
+  "version": "1.0.0",
+  "documentation": "https://github.com/",
+  "requirements": ["requests", "qrcode", "Pillow"],
+  "codeowners": [],
+  "config_flow": true,
+  "iot_class": "local_polling"
+}

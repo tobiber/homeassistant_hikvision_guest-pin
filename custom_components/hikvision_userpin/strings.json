@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Hikvision Device",
+        "description": "Enter the connection details for your Hikvision access control device.",
+        "data": {
+          "base_url": "Device URL",
+          "username": "Username",
+          "password": "Password",
+          "verify_ssl": "Verify SSL certificate"
+        },
+        "data_description": {
+          "base_url": "e.g. http://192.168.1.100"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the device. Please check URL and credentials.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Hikvision Options",
+        "data": {
+          "timeout": "HTTP Timeout (seconds)",
+          "protected_employee_nos": "Protected Employee IDs (comma-separated)",
+          "allowed_events": "Allowed event codes (e.g. 5/75,5/38)",
+          "scan_interval": "Polling interval (seconds)"
+        }
+      }
+    }
+  }
+}

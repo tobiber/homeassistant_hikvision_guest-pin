@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Hikvision Gerät verbinden",
+        "description": "Geben Sie die Verbindungsdaten Ihres Hikvision Zutrittskontrollgeräts ein.",
+        "data": {
+          "base_url": "Geräte-URL",
+          "username": "Benutzername",
+          "password": "Passwort",
+          "verify_ssl": "SSL-Zertifikat prüfen"
+        },
+        "data_description": {
+          "base_url": "z.B. http://192.168.1.100"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum Gerät fehlgeschlagen. Bitte URL und Zugangsdaten prüfen.",
+      "unknown": "Ein unerwarteter Fehler ist aufgetreten."
+    },
+    "abort": {
+      "already_configured": "Dieses Gerät ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Hikvision Optionen",
+        "data": {
+          "timeout": "HTTP-Timeout (Sekunden)",
+          "protected_employee_nos": "Geschützte Mitarbeiter-IDs (kommagetrennt)",
+          "allowed_events": "Erlaubte Ereigniscodes (z.B. 5/75,5/38)",
+          "scan_interval": "Abfrageintervall (Sekunden)"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,102 @@
+create_user:
+  name: Create User
+  description: Create a new user with card on a Hikvision access control device.
+  fields:
+    config_entry_id:
+      name: Config Entry ID
+      description: The config entry ID of the target device.
+      required: true
+      selector:
+        text:
+    name:
+      name: Name
+      description: Display name for the new user.
+      required: true
+      selector:
+        text:
+    start_date:
+      name: Start Date
+      description: Validity start date (YYYY-MM-DD).
+      required: true
+      selector:
+        date:
+    duration:
+      name: Duration
+      description: "Duration code: 1d, 7d, 14d, 4w, 3m, 12m, forever, or custom."
+      default: "7d"
+      selector:
+        select:
+          options:
+            - "1d"
+            - "7d"
+            - "14d"
+            - "4w"
+            - "3m"
+            - "12m"
+            - "forever"
+            - "custom"
+    end_date:
+      name: End Date
+      description: Custom end date (YYYY-MM-DD), only used when duration is "custom".
+      selector:
+        date:
+
+delete_user:
+  name: Delete User
+  description: Delete a user from a Hikvision access control device.
+  fields:
+    config_entry_id:
+      name: Config Entry ID
+      description: The config entry ID of the target device.
+      required: true
+      selector:
+        text:
+    employee_no:
+      name: Employee Number
+      description: The employee number (card ID) of the user to delete.
+      required: true
+      selector:
+        text:
+
+extend_user:
+  name: Extend User
+  description: Extend the validity period of an existing user.
+  fields:
+    config_entry_id:
+      name: Config Entry ID
+      description: The config entry ID of the target device.
+      required: true
+      selector:
+        text:
+    employee_no:
+      name: Employee Number
+      description: The employee number (card ID) of the user to extend.
+      required: true
+      selector:
+        text:
+    duration:
+      name: Duration
+      description: "Duration to extend by: 1d, 7d, 14d, 4w, 3m, 12m, or forever."
+      default: "7d"
+      selector:
+        select:
+          options:
+            - "1d"
+            - "7d"
+            - "14d"
+            - "4w"
+            - "3m"
+            - "12m"
+            - "forever"
+    begin_date:
+      name: Begin Date
+      description: Current validity start date (YYYY-MM-DD).
+      required: true
+      selector:
+        date:
+    current_end:
+      name: Current End Date
+      description: Current validity end date (YYYY-MM-DD). The extension starts from here.
+      required: true
+      selector:
+        date:

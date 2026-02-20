@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hikvision User Control</title>
+    <style>
+      :root {
+        --bg: #f7f7fb;
+        --panel: #ffffff;
+        --text: #111827;
+        --muted: #374151;
+        --border: #e5e5e5;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f172a;
+          --panel: #1f2937;
+          --text: #e5e7eb;
+          --muted: #9ca3af;
+          --border: #374151;
+        }
+      }
+      body { font-family: Arial, sans-serif; margin: 0; padding: 24px; width: 100%; box-sizing: border-box; background: var(--bg); color: var(--text); }
+      h1 { margin-bottom: 8px; }
+      .panel { background: var(--panel); padding: 16px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 16px; color: var(--text); }
+      .main-grid { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
+      .col-left { display: flex; flex-direction: column; gap: 16px; }
+      @media (min-width: 1000px) { .main-grid { grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr); } }
+      form label { display: block; font-weight: 600; margin-top: 8px; }
+      input, select { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; background: var(--panel); color: var(--text); }
+      .date-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .date-row .col { min-width: 0; }
+      button { margin-top: 12px; padding: 10px 16px; background: #1f6feb; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+      button:hover { background: #1558c0; }
+      .table-wrap { width: 100%; overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; min-width: 420px; }
+      th, td { padding: 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+      code { word-break: break-all; }
+      .actions { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; }
+      .actions-cell { display: flex; align-items: center; min-height: 44px; }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 12px;
+        border-radius: 6px;
+        text-decoration: none;
+        border: 1px solid transparent;
+        height: 36px;
+        line-height: 1;
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+      .actions .btn,
+      .actions button { margin-top: 0; min-width: 140px; flex: 1 1 0; }
+      .btn-primary { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+      .btn-primary:hover { background: #1558c0; color: #fff; }
+      .btn-secondary { background: #374151; color: #fff; border-color: #374151; }
+      .btn-secondary:hover { background: #1f2937; color: #fff; }
+      .btn-danger { background: #dc2626; color: #fff; border-color: #dc2626; }
+      .btn-danger:hover { background: #b91c1c; color: #fff; }
+      .device-selector { margin-bottom: 16px; }
+      .device-selector select { max-width: 400px; }
+      @media (max-width: 640px) {
+        body { padding: 12px; }
+        .panel { padding: 12px; }
+        table { min-width: 0; table-layout: fixed; }
+        th, td { padding: 6px; font-size: 14px; }
+        button { width: 100%; }
+        .actions { width: 100%; flex-direction: column; align-items: stretch; gap: 8px; }
+        .actions .btn { flex: 1 1 auto; width: 100%; min-width: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    {% if multi_device %}
+    <div class="panel device-selector">
+      <label for="device_select">Gerät auswählen:</label>
+      <select id="device_select" onchange="window.location.href='{{ panel_url }}/panel?entry_id=' + this.value">
+        {% for eid, ename in entries.items() %}
+          <option value="{{ eid }}" {% if eid == entry_id %}selected{% endif %}>{{ ename }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    <div class="main-grid">
+      <div class="col-left">
+        <div class="panel">
+          <h2>Benutzer</h2>
+          {% if device_users %}
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Gueltig</th>
+                    <th>Aktion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for u in device_users %}
+                    <tr>
+                      <td>{{ u.name }}</td>
+                      <td>{{ u.Valid.beginTime.split('T')[0] }} - {{ u.Valid.endTime.split('T')[0] }}</td>
+                      <td class="actions-cell">
+                        {% if u.employeeNo not in protected %}
+                          <div class="actions">
+                            <a class="btn btn-primary" href="{{ panel_url }}/qr/view/{{ u.employeeNo }}?name={{ u.name|urlencode }}&entry_id={{ entry_id }}">QR-Code</a>
+                            <a class="btn btn-primary" href="{{ panel_url }}/extend/view/{{ u.employeeNo }}?name={{ u.name|urlencode }}&begin={{ u.Valid.beginTime.split('T')[0] }}&end={{ u.Valid.endTime.split('T')[0] }}&entry_id={{ entry_id }}">Verlängern</a>
+                            <form method="post" action="{{ panel_url }}/delete/{{ u.employeeNo }}" onsubmit="return confirm('Benutzer {{ u.name }} ({{ u.employeeNo }}) wirklich löschen?');" style="margin:0;">
+                              <input type="hidden" name="entry_id" value="{{ entry_id }}">
+                              <button class="btn btn-danger" type="submit">Löschen</button>
+                            </form>
+                          </div>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p>Keine Benutzer auf dem Geraet gefunden oder Abruf fehlgeschlagen.</p>
+          {% endif %}
+        </div>
+
+        <div class="panel">
+          <h2>Neuen Benutzer anlegen</h2>
+          <form method="post" action="{{ panel_url }}/add">
+            <input type="hidden" name="entry_id" value="{{ entry_id }}">
+            <label for="name">Name</label>
+            <input id="name" name="name" required />
+            <div class="date-row">
+              <div class="col">
+                <label for="start_date">Start Datum</label>
+                <input id="start_date" name="start_date" type="date" value="{{ today }}" min="{{ today }}" required />
+              </div>
+              <div class="col">
+                <label for="end_date">End Datum</label>
+                <input id="end_date" name="end_date" type="date" readonly required />
+              </div>
+            </div>
+            <label for="duration">Ende nach</label>
+            <select id="duration" name="duration">
+              <option value="1d">1 Tag</option>
+              <option value="7d">7 Tage</option>
+              <option value="14d">14 Tage</option>
+              <option value="4w">4 Wochen</option>
+              <option value="3m">3 Monate</option>
+              <option value="12m">12 Monate</option>
+              <option value="forever">immer</option>
+              <option value="custom">Benutzerdefiniert</option>
+            </select>
+            <button type="submit">Speichern &amp; QR senden</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Ereignisse</h2>
+        {% if device_events %}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Zeit</th>
+                  <th>User</th>
+                  <th>Typ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ev in device_events %}
+                  <tr>
+                    <td>{{ ev.time }}</td>
+                    <td>{{ ev.employeeNoString or ev.employeeNo }}</td>
+                    <td>{{ ev.description }} ({{ ev.code }})</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p>Keine Ereignisse gefunden.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <script>
+  (function() {
+    const startInput = document.getElementById("start_date");
+    const durationSelect = document.getElementById("duration");
+    const endInput = document.getElementById("end_date");
+
+    function pad(n) { return n.toString().padStart(2, "0"); }
+
+    function toISO(dateObj) {
+        return dateObj.getFullYear() + "-" + pad(dateObj.getMonth() + 1) + "-" + pad(dateObj.getDate());
+    }
+
+    function addMonths(dateObj, months) {
+      const d = new Date(dateObj.getTime());
+      const targetMonth = d.getMonth() + months;
+      d.setMonth(targetMonth);
+      const overflowed = d.getMonth() !== (targetMonth % 12 + 12) % 12;
+      if (overflowed) {
+        d.setDate(0);
+      }
+      return d;
+    }
+
+    function computeEnd() {
+      if (!startInput.value) return;
+      const start = new Date(startInput.value + "T00:00:00");
+      let end = new Date(start.getTime());
+      switch (durationSelect.value) {
+        case "1d": end.setDate(end.getDate() + 1); break;
+        case "7d": end.setDate(end.getDate() + 7); break;
+        case "14d": end.setDate(end.getDate() + 14); break;
+        case "4w": end.setDate(end.getDate() + 28); break;
+        case "3m": end = addMonths(start, 3); break;
+        case "12m": end = addMonths(start, 12); break;
+        case "forever": end = new Date("2099-12-31T00:00:00"); break;
+        case "custom":
+          endInput.readOnly = false;
+          endInput.min = startInput.value;
+          endInput.value = startInput.value;
+          return;
+        default: end.setDate(end.getDate() + 7);
+      }
+      endInput.readOnly = true;
+      endInput.value = toISO(end);
+      endInput.min = startInput.value;
+    }
+
+    startInput.addEventListener("change", computeEnd);
+    durationSelect.addEventListener("change", computeEnd);
+    computeEnd();
+  })();
+</script>
+  </body>
+</html>
