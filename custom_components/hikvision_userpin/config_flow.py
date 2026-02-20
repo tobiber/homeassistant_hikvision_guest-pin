@@ -92,14 +92,11 @@ class HikvisionUserPinConfigFlow(ConfigFlow, domain=DOMAIN):
         config_entry: ConfigEntry,
     ) -> HikvisionUserPinOptionsFlow:
         """Return the options flow handler."""
-        return HikvisionUserPinOptionsFlow(config_entry)
+        return HikvisionUserPinOptionsFlow()
 
 
 class HikvisionUserPinOptionsFlow(OptionsFlow):
     """Handle options for Hikvision User & PIN Control."""
-
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        self.config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None

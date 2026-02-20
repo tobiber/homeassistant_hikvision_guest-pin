@@ -108,16 +108,43 @@ const SHARED_STYLES = `
   .btn-secondary:hover:not(:disabled) { opacity: 0.85; }
   .btn-danger { background: var(--error-color, #dc2626); color: #fff; border-color: var(--error-color, #dc2626); }
   .btn-danger:hover:not(:disabled) { opacity: 0.85; }
-  .btn-icon { padding: 0 8px; min-width: 36px; }
-  .btn-icon ha-icon { --mdc-icon-size: 18px; display: flex; }
+  .btn-icon { padding: 0 8px; min-width: 44px; height: 44px; }
+  .btn-icon ha-icon { --mdc-icon-size: 20px; display: flex; }
+  .btn-full { width: 100%; margin-top: 12px; height: 44px; }
+  .btn-full ha-icon { --mdc-icon-size: 18px; margin-right: 6px; }
   .protected-badge {
     display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px;
     background: var(--divider-color, #e5e5e5); color: var(--secondary-text-color, #666);
   }
+  .protected-row td { color: var(--secondary-text-color, #888); }
+  /* Collapsible */
+  .collapsible { margin-top: 12px; }
+  .collapsible-toggle {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 10px 12px; border: 1px solid var(--divider-color, #e5e5e5); border-radius: 8px;
+    background: var(--card-background-color, #fff); color: var(--primary-text-color);
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .collapsible-toggle:active { opacity: 0.7; }
+  .collapsible-toggle .toggle-icon { --mdc-icon-size: 20px; color: var(--primary-color); }
+  .collapsible-toggle .toggle-chevron {
+    --mdc-icon-size: 20px; margin-left: auto;
+    transition: transform 0.2s ease;
+  }
+  .collapsible-toggle.open .toggle-chevron { transform: rotate(180deg); }
+  .collapsible-body {
+    display: none; padding: 12px 0 0;
+  }
+  .collapsible-body.open { display: block; }
   @media (max-width: 640px) {
+    .card-content { padding: 0 12px 12px; }
     table { table-layout: fixed; }
-    th, td { padding: 6px; font-size: 13px; }
+    th, td { padding: 8px 6px; font-size: 13px; }
     .actions { gap: 4px; }
+    th:first-child, td:first-child { width: 35%; }
+    th:nth-child(2), td:nth-child(2) { width: 35%; font-size: 12px; }
+    th:last-child, td:last-child { width: 30%; }
   }
 `;
 
@@ -337,7 +364,7 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
 
     root.innerHTML = `
       <style>${SHARED_STYLES}${MODAL_STYLES}${this._extraStyles()}</style>
-      <ha-card header="Hikvision Benutzer">
+      <ha-card header="${_esc(this._config.title || "Hikvision Benutzer")}">
         <div class="card-content">
           ${loading ? '<p class="loading">Laden…</p>' : ""}
           ${d ? this._renderContent(d) : loading ? "" : '<p class="loading">Keine Daten</p>'}
@@ -364,15 +391,21 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
         const isProt = protectedSet.has(u.employeeNo);
         const eno = u.employeeNo;
 
+        if (isProt) {
+          html += `<tr class="protected-row">
+            <td>${_esc(u.name)}</td>
+            <td></td>
+            <td></td>
+          </tr>`;
+          continue;
+        }
+
         html += `<tr>
           <td>${_esc(u.name)}</td>
           <td>${begin} – ${end}</td>
           <td class="actions-cell">`;
 
-        if (isProt) {
-          html += `<span class="protected-badge">Geschützt</span>`;
-        } else {
-          html += `<div class="actions">
+        html += `<div class="actions">
             <button class="btn btn-icon btn-primary btn-qr" data-eno="${_esc(eno)}" data-name="${_esc(u.name)}" title="QR-Code"><ha-icon icon="mdi:qrcode"></ha-icon></button>
             <button class="btn btn-icon btn-primary btn-extend" data-eno="${_esc(eno)}" data-name="${_esc(u.name)}" data-begin="${begin}" data-end="${end}" title="Verlängern"><ha-icon icon="mdi:calendar-plus"></ha-icon></button>
             <button class="btn btn-icon btn-danger btn-delete" data-eno="${_esc(eno)}" data-name="${_esc(u.name)}" title="Löschen"><ha-icon icon="mdi:delete"></ha-icon></button>
@@ -388,7 +421,6 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
               <button class="btn btn-secondary btn-extend-cancel" data-eno="${_esc(eno)}">Abbrechen</button>
             </div>
           </div>`;
-        }
         html += `</td></tr>`;
       }
       html += `</tbody></table></div>`;
@@ -396,27 +428,37 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
       html += `<p>Keine Benutzer auf dem Gerät gefunden.</p>`;
     }
 
-    /* Create form */
+    /* Create form – collapsible */
     html += `
-      <h3>Neuen Benutzer anlegen</h3>
-      <div class="create-form">
-        <label for="cf-name">Name</label>
-        <input id="cf-name" type="text" required />
-        <div class="date-row">
-          <div class="col">
-            <label for="cf-start">Start Datum</label>
-            <input id="cf-start" type="date" value="${d.today}" min="${d.today}" required />
-          </div>
-          <div class="col">
-            <label for="cf-end">End Datum</label>
-            <input id="cf-end" type="date" readonly required />
+      <div class="collapsible">
+        <button class="collapsible-toggle" id="toggle-create" type="button">
+          <ha-icon icon="mdi:account-plus" class="toggle-icon"></ha-icon>
+          <span>Neuen Benutzer anlegen</span>
+          <ha-icon icon="mdi:chevron-down" class="toggle-chevron"></ha-icon>
+        </button>
+        <div class="collapsible-body" id="create-body">
+          <div class="create-form">
+            <label for="cf-name">Name</label>
+            <input id="cf-name" type="text" required placeholder="Vor- und Nachname" />
+            <label for="cf-duration">Gültigkeitsdauer</label>
+            <select id="cf-duration">
+              ${DURATION_OPTIONS.map((o) => `<option value="${o.value}">${o.label}</option>`).join("")}
+            </select>
+            <div class="date-row">
+              <div class="col">
+                <label for="cf-start">Start</label>
+                <input id="cf-start" type="date" value="${d.today}" min="${d.today}" required />
+              </div>
+              <div class="col">
+                <label for="cf-end">Ende</label>
+                <input id="cf-end" type="date" readonly required />
+              </div>
+            </div>
+            <button class="btn btn-primary btn-full" id="btn-create">
+              <ha-icon icon="mdi:check"></ha-icon> Speichern
+            </button>
           </div>
         </div>
-        <label for="cf-duration">Ende nach</label>
-        <select id="cf-duration">
-          ${DURATION_OPTIONS.map((o) => `<option value="${o.value}">${o.label}</option>`).join("")}
-        </select>
-        <button class="btn btn-primary" id="btn-create">Speichern</button>
       </div>`;
 
     return html;
@@ -465,6 +507,16 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
   _attachEvents(d) {
     const root = this.shadowRoot;
     this._attachDeviceSelector();
+
+    /* Collapsible toggle */
+    const toggleBtn = root.getElementById("toggle-create");
+    const createBody = root.getElementById("create-body");
+    if (toggleBtn && createBody) {
+      toggleBtn.addEventListener("click", () => {
+        toggleBtn.classList.toggle("open");
+        createBody.classList.toggle("open");
+      });
+    }
 
     /* PIN keypad */
     root.querySelectorAll("#pin-modal .key").forEach((btn) => {
@@ -583,13 +635,19 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
         display: block; font-weight: 600; margin-top: 8px; color: var(--primary-text-color);
       }
       .create-form input, .create-form select, .extend-form select {
-        width: 100%; padding: 8px; margin-top: 4px;
-        border: 1px solid var(--divider-color, #e5e5e5); border-radius: 4px; box-sizing: border-box;
+        width: 100%; padding: 10px; margin-top: 4px;
+        font-size: 16px;
+        border: 1px solid var(--divider-color, #e5e5e5); border-radius: 8px; box-sizing: border-box;
         background: var(--card-background-color, #fff); color: var(--primary-text-color);
+        -webkit-appearance: none; appearance: none;
+      }
+      .create-form select, .extend-form select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 10px center;
+        padding-right: 30px;
       }
       .date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
       .date-row .col { min-width: 0; }
-      .create-form .btn { margin-top: 12px; }
       .extend-form {
         margin-top: 8px; padding: 10px;
         background: var(--card-background-color, #fff);
@@ -597,6 +655,7 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
       }
       .extend-info { margin: 4px 0 8px; font-size: 0.9em; color: var(--secondary-text-color, #888); }
       .extend-buttons { display: flex; gap: 6px; margin-top: 8px; }
+      .extend-buttons .btn { flex: 1; height: 44px; }
     `;
   }
 }
@@ -615,7 +674,7 @@ class HikvisionUserPinEventsCard extends HikvisionBaseCard {
     const loading = this._loading && !d;
     root.innerHTML = `
       <style>${SHARED_STYLES}${this._extraStyles()}</style>
-      <ha-card header="Hikvision Ereignisse">
+      <ha-card header="${_esc(this._config.title || "Hikvision Ereignisse")}">
         <div class="card-content">
           ${loading ? '<p class="loading">Laden…</p>' : ""}
           ${d ? this._renderContent(d) : loading ? "" : '<p class="loading">Keine Daten</p>'}
