@@ -76,14 +76,9 @@ function _esc(s) {
 /* ------------------------------------------------------------------ */
 const SHARED_STYLES = `
   :host { display: block; }
-  ha-card { overflow: visible; }
-  .card-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 16px 0;
-  }
-  h1.title {
-    margin: 0; font-size: 1.2em; font-weight: 500;
-    color: var(--ha-card-header-color, var(--primary-text-color));
+  ha-card { overflow: visible; position: relative; }
+  .header-actions {
+    position: absolute; top: 12px; right: 12px;
   }
   .btn-refresh {
     background: none; border: none; cursor: pointer; padding: 6px;
@@ -389,9 +384,8 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
 
     root.innerHTML = `
       <style>${SHARED_STYLES}${MODAL_STYLES}${this._extraStyles()}</style>
-      <ha-card>
-        <div class="card-header">
-          <h1 class="title">${_esc(this._config.title || "Hikvision Benutzer")}</h1>
+      <ha-card header="${_esc(this._config.title || "Hikvision Benutzer")}">
+        <div class="header-actions">
           <button class="btn-refresh" id="btn-refresh" title="Aktualisieren"><ha-icon icon="mdi:refresh"></ha-icon></button>
         </div>
         <div class="card-content">
