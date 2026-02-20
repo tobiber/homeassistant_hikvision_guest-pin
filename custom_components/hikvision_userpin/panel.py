@@ -159,9 +159,8 @@ class HikvisionDeleteUserView(HomeAssistantView):
     name = "api:hikvision_userpin:delete"
     requires_auth = True
 
-    async def post(self, request: web.Request) -> web.Response:
+    async def post(self, request: web.Request, employee_no: str) -> web.Response:
         hass: HomeAssistant = request.app["hass"]
-        employee_no = request.match_info["employee_no"]
         form = await request.post()
         entry_id = form.get("entry_id")
 
@@ -196,8 +195,7 @@ class HikvisionQrDownloadView(HomeAssistantView):
     name = "api:hikvision_userpin:qr"
     requires_auth = True
 
-    async def get(self, request: web.Request) -> web.Response:
-        value = request.match_info["value"]
+    async def get(self, request: web.Request, value: str) -> web.Response:
         buf = await request.app["hass"].async_add_executor_job(
             create_qr_image, value,
         )
@@ -217,9 +215,8 @@ class HikvisionQrPageView(HomeAssistantView):
     name = "api:hikvision_userpin:qr_view"
     requires_auth = True
 
-    async def get(self, request: web.Request) -> web.Response:
+    async def get(self, request: web.Request, value: str) -> web.Response:
         hass: HomeAssistant = request.app["hass"]
-        value = request.match_info["value"]
         name = request.query.get("name", "")
         entry_id = request.query.get("entry_id", "")
 
@@ -253,8 +250,7 @@ class HikvisionExtendPageView(HomeAssistantView):
     name = "api:hikvision_userpin:extend_view"
     requires_auth = True
 
-    async def get(self, request: web.Request) -> web.Response:
-        employee_no = request.match_info["employee_no"]
+    async def get(self, request: web.Request, employee_no: str) -> web.Response:
         name = request.query.get("name", "")
         begin_date = request.query.get("begin", "")
         current_end = request.query.get("end", "")
@@ -279,9 +275,8 @@ class HikvisionExtendUserView(HomeAssistantView):
     name = "api:hikvision_userpin:extend"
     requires_auth = True
 
-    async def post(self, request: web.Request) -> web.Response:
+    async def post(self, request: web.Request, employee_no: str) -> web.Response:
         hass: HomeAssistant = request.app["hass"]
-        employee_no = request.match_info["employee_no"]
         form = await request.post()
 
         entry_id = form.get("entry_id")
@@ -324,7 +319,7 @@ class HikvisionDataApiView(HomeAssistantView):
         entry_id = request.query.get("entry_id")
         entry_info = _get_entry(hass, entry_id)
         if not entry_info:
-            return web.json_response({"error": "No device configured"}, status=404)
+            return self.json({"error": "No device configured"}, status_code=404)
 
         active_entry_id, entry_data = entry_info
         coordinator: HikvisionCoordinator = entry_data["coordinator"]
@@ -347,7 +342,7 @@ class HikvisionDataApiView(HomeAssistantView):
             else ""
         ))
 
-        return web.json_response({
+        return self.json({
             "entry_id": active_entry_id,
             "entries": entries,
             "users": device_users,
@@ -364,17 +359,14 @@ class HikvisionQrBase64View(HomeAssistantView):
     name = "api:hikvision_userpin:qr_base64"
     requires_auth = True
 
-    async def get(self, request: web.Request) -> web.Response:
-        hass: HomeAssistant = request.app["hass"]
-        value = request.match_info["value"]
+    async def get(self, request: web.Request, value: str) -> web.Response:
         try:
+            hass: HomeAssistant = request.app["hass"]
             qr_b64 = await hass.async_add_executor_job(qr_base64, value)
-        except Exception as exc:
-            _LOGGER.error("QR generation failed for %s: %s", value, exc)
-            return web.json_response(
-                {"error": f"QR generation failed: {exc}"}, status=500
-            )
-        return web.json_response({"qr_data": qr_b64})
+            return self.json({"qr_data": qr_b64})
+        except Exception:
+            _LOGGER.exception("QR base64 view failed for value=%s", value)
+            return self.json({"error": "QR generation failed"}, status_code=500)
 
 
 _VIEWS = [

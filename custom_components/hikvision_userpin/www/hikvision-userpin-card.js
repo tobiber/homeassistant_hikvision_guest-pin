@@ -108,6 +108,8 @@ const SHARED_STYLES = `
   .btn-secondary:hover:not(:disabled) { opacity: 0.85; }
   .btn-danger { background: var(--error-color, #dc2626); color: #fff; border-color: var(--error-color, #dc2626); }
   .btn-danger:hover:not(:disabled) { opacity: 0.85; }
+  .btn-icon { padding: 0 8px; min-width: 36px; }
+  .btn-icon ha-icon { --mdc-icon-size: 18px; display: flex; }
   .protected-badge {
     display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px;
     background: var(--divider-color, #e5e5e5); color: var(--secondary-text-color, #666);
@@ -115,8 +117,7 @@ const SHARED_STYLES = `
   @media (max-width: 640px) {
     table { table-layout: fixed; }
     th, td { padding: 6px; font-size: 13px; }
-    .actions { flex-direction: column; align-items: stretch; gap: 4px; }
-    .actions .btn { width: 100%; min-width: 0; }
+    .actions { gap: 4px; }
   }
 `;
 
@@ -372,9 +373,9 @@ class HikvisionUserPinUsersCard extends HikvisionBaseCard {
           html += `<span class="protected-badge">Geschützt</span>`;
         } else {
           html += `<div class="actions">
-            <button class="btn btn-primary btn-qr" data-eno="${_esc(eno)}" data-name="${_esc(u.name)}">QR-Code</button>
-            <button class="btn btn-primary btn-extend" data-eno="${_esc(eno)}" data-name="${_esc(u.name)}" data-begin="${begin}" data-end="${end}">Verlängern</button>
-            <button class="btn btn-danger btn-delete" data-eno="${_esc(eno)}" data-name="${_esc(u.name)}">Löschen</button>
+            <button class="btn btn-icon btn-primary btn-qr" data-eno="${_esc(eno)}" data-name="${_esc(u.name)}" title="QR-Code"><ha-icon icon="mdi:qrcode"></ha-icon></button>
+            <button class="btn btn-icon btn-primary btn-extend" data-eno="${_esc(eno)}" data-name="${_esc(u.name)}" data-begin="${begin}" data-end="${end}" title="Verlängern"><ha-icon icon="mdi:calendar-plus"></ha-icon></button>
+            <button class="btn btn-icon btn-danger btn-delete" data-eno="${_esc(eno)}" data-name="${_esc(u.name)}" title="Löschen"><ha-icon icon="mdi:delete"></ha-icon></button>
           </div>
           <div class="extend-form" id="extend-${_esc(eno)}" style="display:none;">
             <label>Verlängern: ${_esc(u.name)}</label>
