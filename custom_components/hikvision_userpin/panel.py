@@ -143,10 +143,20 @@ class HikvisionAddUserView(HomeAssistantView):
         card_id = generate_card_id()
         employee_no = card_id
 
-        await hass.async_add_executor_job(
+        result = await hass.async_add_executor_job(
             client.create_user_with_card,
             employee_no, name, start_date, end_date, card_id,
         )
+        if not result["user_created"]:
+            _LOGGER.error(
+                "Panel: failed to create user %s: %s",
+                name, result.get("create_detail"),
+            )
+        elif not result["card_bound"]:
+            _LOGGER.warning(
+                "Panel: user %s created but card binding failed: %s",
+                name, result.get("card_detail"),
+            )
 
         await coordinator.async_request_refresh()
         raise web.HTTPFound(f"{PANEL_URL}/panel?entry_id={active_entry_id}")
@@ -183,7 +193,13 @@ class HikvisionDeleteUserView(HomeAssistantView):
         if employee_no in protected:
             raise web.HTTPFound(f"{PANEL_URL}/panel?entry_id={active_entry_id}")
 
-        await hass.async_add_executor_job(client.delete_user, employee_no)
+        success, detail = await hass.async_add_executor_job(
+            client.delete_user, employee_no
+        )
+        if not success:
+            _LOGGER.error(
+                "Panel: failed to delete user %s: %s", employee_no, detail
+            )
         await coordinator.async_request_refresh()
         raise web.HTTPFound(f"{PANEL_URL}/panel?entry_id={active_entry_id}")
 
@@ -300,9 +316,13 @@ class HikvisionExtendUserView(HomeAssistantView):
         new_end_dt = compute_end_date(current_end_dt, duration)
         new_end_str = new_end_dt.strftime("%Y-%m-%d")
 
-        await hass.async_add_executor_job(
+        success, detail = await hass.async_add_executor_job(
             client.update_validity, employee_no, begin_date, new_end_str,
         )
+        if not success:
+            _LOGGER.error(
+                "Panel: failed to extend user %s: %s", employee_no, detail
+            )
         await coordinator.async_request_refresh()
         raise web.HTTPFound(f"{PANEL_URL}/panel?entry_id={active_entry_id}")
 

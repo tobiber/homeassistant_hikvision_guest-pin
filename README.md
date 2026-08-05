@@ -161,6 +161,33 @@ data:
 
 Neben den Lovelace Cards wird automatisch ein Sidebar-Panel unter **Hikvision UserPin** registriert. Dieses zeigt eine iframe-basierte Verwaltungsoberfläche mit denselben Funktionen.
 
+## Fehlerbehebung
+
+### Benutzer werden nicht angelegt oder gelöscht
+
+Hikvision-Geräte antworten auf Zutrittskontroll-Befehle **auch bei Fehlern mit
+HTTP 200** – das eigentliche Ergebnis steht im JSON-Body (`statusCode`). Die
+Integration wertet diesen Status seit v1.1.0 aus und meldet Fehler nun aktiv:
+
+- **Services** (`create_user`, `delete_user`, `extend_user`, `deactivate_user`)
+  lösen bei einer Geräte-Ablehnung einen Fehler mit der Geräte-Meldung aus
+  (sichtbar in der Aktion/Automation).
+- **Panel & Cards** protokollieren die Geräte-Meldung im Home-Assistant-Log
+  (`Einstellungen → System → Protokolle`, Filter `hikvision_userpin`).
+
+Typische Geräte-Meldungen und Ursachen:
+
+| `subStatusCode` | Bedeutung |
+|-----------------|-----------|
+| `deviceUserAlreadyExist` | Benutzer/Karte existiert bereits (wird als Erfolg gewertet) |
+| `employeeNoNotExist` | Zu löschender Benutzer existiert nicht (wird als Erfolg gewertet) |
+| `notSupport` / `invalidContent` | Firmware akzeptiert das Payload-Feld nicht |
+| `deviceIsBusy` / `capacity...` | Gerät ausgelastet bzw. Speicher voll |
+
+Wenn ein Benutzer zwar angelegt wird, aber keinen Zutritt erhält, liegt es oft
+an der Zeitzone der Gültigkeit. Die Integration sendet die Gültigkeit daher mit
+`timeType: local`, damit das Gerät sie nicht als UTC interpretiert.
+
 ## Unterstützte Geräte
 
 Getestet mit Hikvision Zutrittskontrollgeräten, die die ISAPI-Schnittstelle unterstützen:
