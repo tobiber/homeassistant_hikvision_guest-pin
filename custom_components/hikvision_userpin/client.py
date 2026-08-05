@@ -18,6 +18,23 @@ from .const import DEFAULT_ALLOWED_EVENTS, EVENT_LABELS
 
 _LOGGER = logging.getLogger(__name__)
 
+# Hikvision ISAPI returns statusCode == 1 ("OK") on success. Any other value
+# is a failure, even though the HTTP status is 200. See the ResponseStatus
+# envelope documented at tpp.hikvision.com.
+ISAPI_STATUS_OK = 1
+
+# subStatusCodes that we treat as success because the desired end state is
+# already reached (idempotent create/delete).
+BENIGN_SUB_STATUS = {
+    "employeeNoAlreadyExist",
+    "deviceUserAlreadyExist",
+    "userAlreadyExist",
+    "cardNoAlreadyExist",
+    "employeeNoNotExist",
+    "userNotExist",
+    "deviceUserNotExist",
+}
+
 
 # ---------------------------------------------------------------------------
 # Utility functions
@@ -189,7 +206,48 @@ class HikvisionClient:
 
     # -- Low-level helpers --------------------------------------------------
 
+    @staticmethod
+    def _parse_status(resp: requests.Response) -> tuple[bool, str]:
+        """Inspect an ISAPI response body and decide if the op truly succeeded.
+
+        Hikvision returns HTTP 200 even for failed access-control operations,
+        carrying the real outcome in a ``ResponseStatus`` JSON envelope
+        (``statusCode`` / ``subStatusCode`` / ``errorMsg``). ``statusCode == 1``
+        means OK; anything else is a failure we must surface.
+
+        Returns ``(ok, detail)`` where ``detail`` is a short human-readable
+        reason on failure (or the benign sub-status on success).
+        """
+        text = resp.text or ""
+        try:
+            data = resp.json()
+        except ValueError:
+            # Non-JSON body (some endpoints answer with XML or empty on 2xx).
+            # We already know the HTTP status is 2xx, so treat it as success.
+            return True, text[:200]
+
+        if not isinstance(data, dict):
+            return True, str(data)[:200]
+
+        status_code = data.get("statusCode")
+        if status_code is None:
+            # No ResponseStatus envelope (e.g. a data payload) — the 2xx HTTP
+            # status is authoritative.
+            return True, ""
+
+        sub = str(data.get("subStatusCode", "") or "")
+        if status_code == ISAPI_STATUS_OK:
+            return True, sub or "ok"
+        if sub in BENIGN_SUB_STATUS:
+            return True, sub
+        detail = (
+            f"statusCode={status_code} subStatusCode={sub or '-'} "
+            f"errorMsg={data.get('errorMsg') or data.get('statusString') or '-'}"
+        )
+        return False, detail
+
     def _post_raw(self, path: str, payload: Dict) -> Optional[requests.Response]:
+        """POST and return the response on HTTP 2xx (read operations)."""
         url = f"{self.base_url}{path}"
         try:
             resp = self._session.post(
@@ -206,36 +264,75 @@ class HikvisionClient:
             _LOGGER.exception("Hikvision POST %s errored: %s", url, exc)
             return None
 
-    def _post_ok(self, path: str, payload: Dict) -> bool:
-        return self._post_raw(path, payload) is not None
+    def _post_status(self, path: str, payload: Dict) -> tuple[bool, str]:
+        """POST a state-changing op and verify both HTTP and ISAPI status."""
+        url = f"{self.base_url}{path}"
+        try:
+            resp = self._session.post(
+                url, json=payload, timeout=self.timeout,
+            )
+        except requests.RequestException as exc:
+            _LOGGER.error("Hikvision POST %s errored: %s", url, exc)
+            return False, f"connection error: {exc}"
+        if not 200 <= resp.status_code < 300:
+            _LOGGER.error(
+                "Hikvision POST %s failed (HTTP %s): %s",
+                url, resp.status_code, resp.text,
+            )
+            return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
+        ok, detail = self._parse_status(resp)
+        if not ok:
+            _LOGGER.error("Hikvision POST %s rejected by device: %s", url, detail)
+        return ok, detail
 
-    def _request(self, method_order: tuple, url: str, payload: Dict) -> bool:
-        """Try PUT then POST (or vice versa) — DRY helper for delete/modify."""
+    def _request(
+        self, method_order: tuple, url: str, payload: Dict
+    ) -> tuple[bool, str]:
+        """Try PUT then POST (or vice versa) for delete/modify ops.
+
+        Verifies both the HTTP status and the ISAPI ``statusCode`` body.
+        Returns ``(ok, detail)``.
+        """
+        last_detail = "no response"
         for method in method_order:
             try:
                 resp = self._session.request(
                     method, url, json=payload, timeout=self.timeout,
                 )
-                if 200 <= resp.status_code < 300:
-                    return True
-                _LOGGER.error(
-                    "Hikvision %s %s failed (%s): %s",
-                    method.upper(), url, resp.status_code, resp.text,
-                )
-                if resp.status_code not in (400, 405):
-                    break
             except requests.RequestException as exc:
-                _LOGGER.exception(
+                _LOGGER.error(
                     "Hikvision %s %s errored: %s", method.upper(), url, exc,
                 )
+                last_detail = f"connection error: {exc}"
                 break
-        return False
+            if 200 <= resp.status_code < 300:
+                ok, detail = self._parse_status(resp)
+                if ok:
+                    return True, detail
+                _LOGGER.error(
+                    "Hikvision %s %s rejected by device: %s",
+                    method.upper(), url, detail,
+                )
+                # Device answered 2xx but rejected the body. Some firmware
+                # routes delete/modify to a different verb, so fall through
+                # and try the next one (both ops are idempotent).
+                last_detail = detail
+                continue
+            _LOGGER.error(
+                "Hikvision %s %s failed (HTTP %s): %s",
+                method.upper(), url, resp.status_code, resp.text,
+            )
+            last_detail = f"HTTP {resp.status_code}: {resp.text[:200]}"
+            # 400/405 => wrong verb for this firmware, try the next one.
+            if resp.status_code not in (400, 405):
+                break
+        return False, last_detail
 
     # -- ISAPI operations ---------------------------------------------------
 
     def create_user(
         self, employee_no: str, name: str, start_date: str, end_date: str
-    ) -> bool:
+    ) -> tuple[bool, str]:
         payload = {
             "UserInfo": {
                 "employeeNo": employee_no,
@@ -246,6 +343,10 @@ class HikvisionClient:
                 "userVerifyMode": "card",
                 "Valid": {
                     "enable": True,
+                    # timeType=local keeps the device from interpreting the
+                    # window as UTC, which would shift validity by the TZ
+                    # offset and make a "successfully created" user unusable.
+                    "timeType": "local",
                     "beginTime": iso_date(start_date),
                     "endTime": iso_date(end_date, end_of_day=True),
                 },
@@ -253,13 +354,13 @@ class HikvisionClient:
                 "rightPlan": [{"doorNo": 1, "planTemplateNo": "1"}],
             }
         }
-        return self._post_ok(
+        return self._post_status(
             "/ISAPI/AccessControl/UserInfo/Record?format=json", payload,
         )
 
     def bind_card(
         self, employee_no: str, card_id: str, start_date: str, end_date: str
-    ) -> bool:
+    ) -> tuple[bool, str]:
         payload = {
             "CardInfo": {
                 "employeeNo": employee_no,
@@ -271,7 +372,7 @@ class HikvisionClient:
                 "endDate": iso_date(end_date, end_of_day=True),
             }
         }
-        return self._post_ok(
+        return self._post_status(
             "/ISAPI/AccessControl/CardInfo/Record?format=json", payload,
         )
 
@@ -391,15 +492,23 @@ class HikvisionClient:
         end_date: str,
         card_id: str,
     ) -> Dict[str, Any]:
-        created = self.create_user(employee_no, name, start_date, end_date)
+        created, create_detail = self.create_user(
+            employee_no, name, start_date, end_date
+        )
         card_bound = False
+        card_detail = ""
         if created:
-            card_bound = self.bind_card(
+            card_bound, card_detail = self.bind_card(
                 employee_no, card_id, start_date, end_date,
             )
-        return {"user_created": created, "card_bound": card_bound}
+        return {
+            "user_created": created,
+            "card_bound": card_bound,
+            "create_detail": create_detail,
+            "card_detail": card_detail,
+        }
 
-    def delete_user(self, employee_no: str) -> bool:
+    def delete_user(self, employee_no: str) -> tuple[bool, str]:
         payload = {
             "UserInfoDelCond": {
                 "EmployeeNoList": [{"employeeNo": employee_no}],
@@ -410,12 +519,13 @@ class HikvisionClient:
 
     def update_validity(
         self, employee_no: str, begin_date: str, end_date: str
-    ) -> bool:
+    ) -> tuple[bool, str]:
         payload = {
             "UserInfo": {
                 "employeeNo": employee_no,
                 "Valid": {
                     "enable": True,
+                    "timeType": "local",
                     "beginTime": iso_date(begin_date),
                     "endTime": iso_date(end_date, end_of_day=True),
                 },

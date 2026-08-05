@@ -101,15 +101,29 @@ async def async_handle_create_user(hass: HomeAssistant, call: ServiceCall) -> No
     )
 
     if not result["user_created"]:
-        _LOGGER.error("Failed to create user %s on device", name)
-    elif not result["card_bound"]:
-        _LOGGER.warning("User %s created but card binding failed", name)
-    else:
-        _LOGGER.info(
-            "User %s created with card %s, valid %s to %s",
-            name, card_id, start_date, end_date,
+        _LOGGER.error(
+            "Failed to create user %s on device: %s",
+            name, result.get("create_detail"),
+        )
+        raise HomeAssistantError(
+            f"Benutzer {name} konnte nicht angelegt werden "
+            f"({result.get('create_detail')})"
+        )
+    if not result["card_bound"]:
+        _LOGGER.warning(
+            "User %s created but card binding failed: %s",
+            name, result.get("card_detail"),
+        )
+        await coordinator.async_request_refresh()
+        raise HomeAssistantError(
+            f"Benutzer {name} angelegt, aber Karte konnte nicht gebunden "
+            f"werden ({result.get('card_detail')})"
         )
 
+    _LOGGER.info(
+        "User %s created with card %s, valid %s to %s",
+        name, card_id, start_date, end_date,
+    )
     await coordinator.async_request_refresh()
 
 
@@ -122,9 +136,13 @@ async def async_handle_delete_user(hass: HomeAssistant, call: ServiceCall) -> No
 
     employee_no = data["employee_no"]
 
-    success = await hass.async_add_executor_job(client.delete_user, employee_no)
+    success, detail = await hass.async_add_executor_job(
+        client.delete_user, employee_no
+    )
     if not success:
-        raise HomeAssistantError(f"Benutzer {employee_no} konnte nicht gelöscht werden")
+        raise HomeAssistantError(
+            f"Benutzer {employee_no} konnte nicht gelöscht werden ({detail})"
+        )
 
     _LOGGER.info("Deleted user %s from device", employee_no)
     await coordinator.async_request_refresh()
@@ -146,11 +164,13 @@ async def async_handle_extend_user(hass: HomeAssistant, call: ServiceCall) -> No
     new_end_dt = compute_end_date(current_end_dt, duration)
     new_end_str = new_end_dt.strftime("%Y-%m-%d")
 
-    success = await hass.async_add_executor_job(
+    success, detail = await hass.async_add_executor_job(
         client.update_validity, employee_no, begin_date, new_end_str,
     )
     if not success:
-        raise HomeAssistantError(f"Benutzer {employee_no} konnte nicht verlängert werden")
+        raise HomeAssistantError(
+            f"Benutzer {employee_no} konnte nicht verlängert werden ({detail})"
+        )
 
     _LOGGER.info("Extended user %s validity to %s", employee_no, new_end_str)
     await coordinator.async_request_refresh()
@@ -167,11 +187,13 @@ async def async_handle_deactivate_user(hass: HomeAssistant, call: ServiceCall) -
     begin_date = data["begin_date"]
     yesterday = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
 
-    success = await hass.async_add_executor_job(
+    success, detail = await hass.async_add_executor_job(
         client.update_validity, employee_no, begin_date, yesterday,
     )
     if not success:
-        raise HomeAssistantError(f"Benutzer {employee_no} konnte nicht deaktiviert werden")
+        raise HomeAssistantError(
+            f"Benutzer {employee_no} konnte nicht deaktiviert werden ({detail})"
+        )
 
     _LOGGER.info("Deactivated user %s (end set to %s)", employee_no, yesterday)
     await coordinator.async_request_refresh()
