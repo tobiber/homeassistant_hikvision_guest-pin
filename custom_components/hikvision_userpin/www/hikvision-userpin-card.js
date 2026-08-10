@@ -785,11 +785,21 @@ class HikvisionUserPinEventsCard extends HikvisionBaseCard {
 /* ================================================================== */
 /*  Register                                                          */
 /* ================================================================== */
-customElements.define("hikvision-userpin-users", HikvisionUserPinUsersCard);
-customElements.define("hikvision-userpin-events", HikvisionUserPinEventsCard);
+// Guard every define: if this module ever loads twice (e.g. as both an
+// extra-module URL and a Lovelace resource), an unguarded define() throws a
+// DOMException that aborts frontend init and takes other custom cards down
+// with it. Registering only when absent keeps a double-load harmless.
+if (!customElements.get("hikvision-userpin-users")) {
+  customElements.define("hikvision-userpin-users", HikvisionUserPinUsersCard);
+}
+if (!customElements.get("hikvision-userpin-events")) {
+  customElements.define("hikvision-userpin-events", HikvisionUserPinEventsCard);
+}
 
 window.customCards = window.customCards || [];
-window.customCards.push(
-  { type: "hikvision-userpin-users",  name: "Hikvision Benutzer",    description: "Benutzertabelle mit PIN-Schutz, QR-Codes und Anlegen-Formular." },
-  { type: "hikvision-userpin-events", name: "Hikvision Ereignisse",  description: "Ereignistabelle mit Blättern (10 pro Seite)." }
-);
+if (!window.customCards.some((c) => c.type === "hikvision-userpin-users")) {
+  window.customCards.push(
+    { type: "hikvision-userpin-users",  name: "Hikvision Benutzer",    description: "Benutzertabelle mit PIN-Schutz, QR-Codes und Anlegen-Formular." },
+    { type: "hikvision-userpin-events", name: "Hikvision Ereignisse",  description: "Ereignistabelle mit Blättern (10 pro Seite)." }
+  );
+}

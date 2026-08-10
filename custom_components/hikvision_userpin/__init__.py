@@ -6,7 +6,6 @@ import logging
 import os
 from typing import Any
 
-from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -49,7 +48,12 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(CARD_JS_URL, card_js_path, False)]
     )
-    add_extra_js_url(hass, CARD_JS_URL)
+    # NOTE: We intentionally do NOT call add_extra_js_url() here. That would
+    # inject the card module into *every* frontend page globally; combined with
+    # the Lovelace resource registration below it loaded the module twice, and
+    # a failure in a globally-injected module can break the whole frontend
+    # (including other integrations' custom cards). The Lovelace resource alone
+    # makes the cards available to dashboards.
     _LOGGER.info(
         "Registered Hikvision UserPin card JS: %s -> %s",
         CARD_JS_URL,
