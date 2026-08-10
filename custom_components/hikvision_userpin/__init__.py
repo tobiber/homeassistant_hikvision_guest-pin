@@ -6,7 +6,6 @@ import logging
 import os
 from typing import Any
 
-from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -24,7 +23,7 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import HikvisionCoordinator
-from .panel import async_register_panel, async_register_views, async_unregister_panel
+from .panel import async_register_views
 from .services import async_register_services, async_unregister_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,7 +48,12 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(CARD_JS_URL, card_js_path, False)]
     )
-    add_extra_js_url(hass, CARD_JS_URL)
+    # NOTE: We intentionally do NOT call add_extra_js_url() here. That would
+    # inject the card module into *every* frontend page globally; combined with
+    # the Lovelace resource registration below it loaded the module twice, and
+    # a failure in a globally-injected module can break the whole frontend
+    # (including other integrations' custom cards). The Lovelace resource alone
+    # makes the cards available to dashboards.
     _LOGGER.info(
         "Registered Hikvision UserPin card JS: %s -> %s",
         CARD_JS_URL,
@@ -114,7 +118,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     # Create coordinator – first refresh may fail if device is unreachable;
-    # we continue setup so views/services/panel stay available.
+    # we continue setup so views and services stay available.
     coordinator = HikvisionCoordinator(hass, client, dict(options))
     try:
         await coordinator.async_config_entry_first_refresh()
@@ -134,10 +138,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Forward to sensor platform
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Register services and sidebar panel (only once, on first entry)
+    # Register services (only once, on first entry)
     if len(hass.data[DOMAIN]) == 1:
         async_register_services(hass)
-        async_register_panel(hass)
 
     # Listen for option updates
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -167,10 +170,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
 
-    # Unregister services and panel when last entry is removed
+    # Unregister services when last entry is removed
     if not hass.data[DOMAIN]:
         async_unregister_services(hass)
-        async_unregister_panel(hass)
         hass.data.pop(DOMAIN)
 
     return unload_ok

@@ -7,7 +7,6 @@ Home Assistant Custom Integration zur Verwaltung von Benutzern und Zugangskarten
 - Benutzer anlegen, löschen und Gültigkeit verlängern
 - QR-Code Generierung für Zugangskarten
 - Zwei native Lovelace Dashboard Cards (Benutzer + Ereignisse)
-- Iframe-Sidebar-Panel als Alternative
 - PIN-Schutz für sensible Aktionen (Löschen, QR, Verlängern)
 - Geschützte Benutzer (nicht löschbar)
 - HA Services für Automationen
@@ -157,9 +156,22 @@ data:
   current_end: "2025-01-08"
 ```
 
-## Sidebar-Panel
+## Sicherheit
 
-Neben den Lovelace Cards wird automatisch ein Sidebar-Panel unter **Hikvision UserPin** registriert. Dieses zeigt eine iframe-basierte Verwaltungsoberfläche mit denselben Funktionen.
+Alle Zugriffe auf die Integration sind authentifiziert:
+
+- Die Lovelace-Cards greifen über die angemeldete Home-Assistant-Sitzung
+  (`hass.callApi` / `hass.callService`) zu – es wird automatisch ein
+  Login-Token gesendet.
+- Die HTTP-Endpunkte (`/api/hikvision_userpin/data`, `/qr/base64/...`)
+  erfordern eine gültige Anmeldung.
+
+> **Hinweis (seit v1.2.0):** Das frühere iframe-Sidebar-Panel wurde entfernt.
+> Ein Iframe kann keinen Login-Token senden, weshalb dessen Endpunkte
+> (`/panel`, `/add`, `/delete`, `/extend`) nur ohne Authentifizierung
+> funktionieren konnten – d. h. das Anlegen und Löschen von Benutzern war ohne
+> Anmeldung erreichbar. Die vollständige Verwaltung erfolgt jetzt ausschließlich
+> über die (ebenfalls mobil-optimierten) Lovelace-Cards und die Services.
 
 ## Fehlerbehebung
 
@@ -206,15 +218,11 @@ custom_components/hikvision_userpin/
 ├── const.py             # Konstanten
 ├── coordinator.py       # DataUpdateCoordinator
 ├── manifest.json        # Integration Manifest
-├── panel.py             # HTTP Views & Panel
+├── panel.py             # Authentifizierte HTTP-API-Views (für die Cards)
 ├── sensor.py            # Sensor-Entitäten
 ├── services.py          # Service-Handler
 ├── services.yaml        # Service-Definitionen
 ├── strings.json         # Englische Strings
-├── templates/
-│   ├── index.html       # Panel Hauptseite
-│   ├── qr.html          # QR-Code Seite
-│   └── extend.html      # Verlängerungsformular
 ├── translations/
 │   └── de.json          # Deutsche Übersetzung
 └── www/
