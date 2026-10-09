@@ -1,0 +1,7 @@
+{
+  "name": "Hikvision User & PIN Control",
+  "render_readme": true,
+  "homeassistant": "2024.7.0",
+  "country": ["DE"],
+  "zip_release": false
+}

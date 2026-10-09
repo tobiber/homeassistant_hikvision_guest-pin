@@ -17,10 +17,14 @@ Home Assistant Custom Integration zur Verwaltung von Benutzern und Zugangskarten
 
 ### HACS (empfohlen)
 
-1. HACS öffnen → **Integrationen** → **Drei Punkte** → **Benutzerdefinierte Repositories**
-2. Repository-URL eintragen und als Kategorie **Integration** auswählen
-3. "Hikvision User & PIN Control" installieren
+1. HACS öffnen → **Integrationen** → **⋮** (Menü oben rechts) → **Benutzerdefinierte Repositories**
+2. Als Repository-URL `https://github.com/tobiber/homeassistant_hikvision_guest-pin` eintragen
+   und als Kategorie **Integration** auswählen
+3. **Hinzufügen** klicken, danach "Hikvision User & PIN Control" in HACS suchen und installieren
 4. Home Assistant neu starten
+
+> Updates werden von HACS anhand der GitHub-Releases erkannt. Erforderlich ist mindestens
+> Home Assistant **2024.7.0**.
 
 ### Manuell
 
@@ -234,6 +238,7 @@ Getestet mit Hikvision Zutrittskontrollgeräten, die die ISAPI-Schnittstelle unt
 ## Dateistruktur
 
 ```
+hacs.json                # HACS-Metadaten (Repo-Wurzel)
 custom_components/hikvision_userpin/
 ├── __init__.py          # Integration Setup
 ├── client.py            # Hikvision ISAPI Client
@@ -252,6 +257,15 @@ custom_components/hikvision_userpin/
     ├── hikvision-userpin-card.js   # Lovelace Cards
     └── hikvision-userpin-panel.js  # Sidebar-Panel (bettet die Cards ein)
 ```
+
+## Veröffentlichung neuer Versionen
+
+HACS erkennt Updates anhand der **GitHub-Releases** – ein reiner Tag genügt nicht.
+Für jede neue Version daher:
+
+1. `"version"` in `custom_components/hikvision_userpin/manifest.json` erhöhen
+2. Änderung committen und taggen: `git tag v1.2.3 && git push origin main --tags`
+3. Release anlegen: `gh release create v1.2.3 --generate-notes`
 
 ## Sicherheit
 
