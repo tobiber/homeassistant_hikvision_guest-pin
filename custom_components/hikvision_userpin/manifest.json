@@ -1,7 +1,7 @@
 {
   "domain": "hikvision_userpin",
   "name": "Hikvision User & PIN Control",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "documentation": "https://github.com/tobiber/homeassistant_hikvision_guest-pin",
   "issue_tracker": "https://github.com/tobiber/homeassistant_hikvision_guest-pin/issues",
   "requirements": ["qrcode[pil]==7.4.2"],

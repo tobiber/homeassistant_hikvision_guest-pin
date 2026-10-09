@@ -6,6 +6,7 @@ import base64
 import logging
 import secrets
 import string
+import threading
 from datetime import datetime, timedelta
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Set
@@ -175,10 +176,27 @@ class HikvisionClient:
         self.base_url = base_url.rstrip("/")
         self.verify = verify
         self.timeout = timeout
-        self._session = requests.Session()
-        self._session.auth = HTTPDigestAuth(username, password)
-        self._session.verify = verify
-        self._session.headers.update({"Content-Type": "application/json"})
+        self._username = username
+        self._password = password
+        # Client methods run via hass.async_add_executor_job, so the
+        # coordinator poll and a service call can hit the session from two
+        # threads at once. The lock keeps a session reset from racing a
+        # request that is already in flight.
+        self._lock = threading.Lock()
+        self._session = self._new_session()
+
+    def _new_session(self) -> requests.Session:
+        """Build a fresh session with a clean digest handshake."""
+        session = requests.Session()
+        session.auth = HTTPDigestAuth(self._username, self._password)
+        session.verify = self.verify
+        session.headers.update({"Content-Type": "application/json"})
+        return session
+
+    def _reset_session(self) -> None:
+        """Drop the current session and start over with a new one."""
+        self._session.close()
+        self._session = self._new_session()
 
     # -- Connection test ----------------------------------------------------
 
@@ -193,9 +211,7 @@ class HikvisionClient:
             }
         }
         try:
-            resp = self._session.post(
-                url, json=payload, timeout=self.timeout,
-            )
+            resp = self._send("post", url, payload)
             if 200 <= resp.status_code < 300:
                 return "ok"
             if resp.status_code == 401:
@@ -205,6 +221,44 @@ class HikvisionClient:
             return "cannot_connect"
 
     # -- Low-level helpers --------------------------------------------------
+
+    def _send(
+        self, method: str, url: str, payload: Optional[Dict] = None
+    ) -> requests.Response:
+        """Send one ISAPI request, renewing the digest session when needed.
+
+        The device stops accepting the digest nonce it handed out earlier and
+        then answers *every* request — Search, AcsEvent, Record, Delete,
+        Modify — with HTTP 401 and an ``invalidOperation`` body. ``requests``
+        keeps replaying the stale nonce, so the client stays broken until the
+        config entry is reloaded. Dropping the session and retrying once
+        forces a fresh handshake and recovers without a reload.
+
+        The same retry covers ``ConnectionError``, because the device readily
+        closes keep-alive sockets it considers idle.
+        """
+        with self._lock:
+            try:
+                resp = self._session.request(
+                    method, url, json=payload, timeout=self.timeout,
+                )
+            except requests.ConnectionError as exc:
+                _LOGGER.debug(
+                    "Hikvision connection dropped (%s), resetting session", exc,
+                )
+                self._reset_session()
+                return self._session.request(
+                    method, url, json=payload, timeout=self.timeout,
+                )
+
+            if resp.status_code != 401:
+                return resp
+
+            _LOGGER.debug("Hikvision auth rejected, resetting digest session")
+            self._reset_session()
+            return self._session.request(
+                method, url, json=payload, timeout=self.timeout,
+            )
 
     @staticmethod
     def _parse_status(resp: requests.Response) -> tuple[bool, str]:
@@ -250,9 +304,7 @@ class HikvisionClient:
         """POST and return the response on HTTP 2xx (read operations)."""
         url = f"{self.base_url}{path}"
         try:
-            resp = self._session.post(
-                url, json=payload, timeout=self.timeout,
-            )
+            resp = self._send("post", url, payload)
             if 200 <= resp.status_code < 300:
                 return resp
             _LOGGER.error(
@@ -268,17 +320,22 @@ class HikvisionClient:
         """POST a state-changing op and verify both HTTP and ISAPI status."""
         url = f"{self.base_url}{path}"
         try:
-            resp = self._session.post(
-                url, json=payload, timeout=self.timeout,
-            )
+            resp = self._send("post", url, payload)
         except requests.RequestException as exc:
             _LOGGER.error("Hikvision POST %s errored: %s", url, exc)
             return False, f"connection error: {exc}"
         if not 200 <= resp.status_code < 300:
-            _LOGGER.error(
-                "Hikvision POST %s failed (HTTP %s): %s",
-                url, resp.status_code, resp.text,
-            )
+            if resp.status_code == 401:
+                _LOGGER.error(
+                    "Hikvision POST %s: authentication rejected by device "
+                    "after session reset – check username/password",
+                    url,
+                )
+            else:
+                _LOGGER.error(
+                    "Hikvision POST %s failed (HTTP %s): %s",
+                    url, resp.status_code, resp.text,
+                )
             return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
         ok, detail = self._parse_status(resp)
         if not ok:
@@ -296,9 +353,7 @@ class HikvisionClient:
         last_detail = "no response"
         for method in method_order:
             try:
-                resp = self._session.request(
-                    method, url, json=payload, timeout=self.timeout,
-                )
+                resp = self._send(method, url, payload)
             except requests.RequestException as exc:
                 _LOGGER.error(
                     "Hikvision %s %s errored: %s", method.upper(), url, exc,
@@ -318,6 +373,16 @@ class HikvisionClient:
                 # and try the next one (both ops are idempotent).
                 last_detail = detail
                 continue
+            if resp.status_code == 401:
+                # _send already retried with a fresh digest handshake, so this
+                # is a real credential problem, not the stale-nonce case.
+                # Trying the other verb cannot help here.
+                _LOGGER.error(
+                    "Hikvision %s %s: authentication rejected by device after "
+                    "session reset – check username/password",
+                    method.upper(), url,
+                )
+                return False, f"HTTP 401: {resp.text[:200]}"
             _LOGGER.error(
                 "Hikvision %s %s failed (HTTP %s): %s",
                 method.upper(), url, resp.status_code, resp.text,

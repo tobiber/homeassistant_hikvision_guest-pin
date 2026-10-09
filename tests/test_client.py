@@ -8,8 +8,11 @@ read from the ISAPI ``statusCode`` body.
 """
 
 import json
+import threading
 from datetime import datetime
 from unittest.mock import MagicMock
+
+import requests
 
 import pytest
 
@@ -83,17 +86,29 @@ def test_parse_status_no_envelope_is_success():
 # create_user / delete_user go through _parse_status
 # ---------------------------------------------------------------------------
 
-def _client():
+def _client(*sessions):
+    """Build a client without __init__, optionally queueing session mocks.
+
+    The first mock is the active session; each ``_reset_session`` hands out
+    the next one, which lets a test observe that the digest session was
+    actually rebuilt.
+    """
     c = HikvisionClient.__new__(HikvisionClient)
     c.base_url = "http://device"
     c.timeout = 8.0
-    c._session = MagicMock()
+    c.verify = False
+    c._username = "admin"
+    c._password = "secret"
+    c._lock = threading.Lock()
+    queue = list(sessions) or [MagicMock()]
+    c._session = queue.pop(0)
+    c._new_session = MagicMock(side_effect=lambda: queue.pop(0))
     return c
 
 
 def test_create_user_reports_device_rejection():
     c = _client()
-    c._session.post.return_value = _resp(
+    c._session.request.return_value = _resp(
         body={"statusCode": 6, "subStatusCode": "riskPassword", "errorMsg": "bad"}
     )
     ok, detail = c.create_user("EMP1", "Max", "2026-01-01", "2026-01-08")
@@ -117,6 +132,92 @@ def test_delete_user_reports_failure_body():
     ok, detail = c.delete_user("EMP1")
     assert ok is False
     assert "invalidContent" in detail
+
+
+# ---------------------------------------------------------------------------
+# Digest session reset — the device invalidates its nonce after a while and
+# then answers every request with 401 + invalidOperation until reconnected.
+# ---------------------------------------------------------------------------
+
+AUTH_REJECTED = {
+    "statusCode": 4,
+    "statusString": "Invalid Operation",
+    "subStatusCode": "invalidOperation",
+    "errorCode": 1073741830,
+}
+
+
+def test_stale_nonce_401_is_retried_on_a_fresh_session():
+    stale, fresh = MagicMock(), MagicMock()
+    stale.request.return_value = _resp(401, body=AUTH_REJECTED)
+    fresh.request.return_value = _resp(body={"statusCode": 1})
+    c = _client(stale, fresh)
+
+    ok, _ = c.delete_user("EMP1")
+
+    assert ok is True
+    assert c._new_session.call_count == 1
+    assert c._session is fresh
+    assert stale.close.called
+    assert stale.request.call_count == 1
+    assert fresh.request.call_count == 1
+
+
+def test_persistent_401_fails_after_exactly_one_retry():
+    stale, fresh = MagicMock(), MagicMock()
+    stale.request.return_value = _resp(401, body=AUTH_REJECTED)
+    fresh.request.return_value = _resp(401, body=AUTH_REJECTED)
+    c = _client(stale, fresh)
+
+    ok, detail = c.delete_user("EMP1")
+
+    assert ok is False
+    assert "401" in detail
+    # One request per session, no endless retry and no PUT/POST fallthrough.
+    assert stale.request.call_count == 1
+    assert fresh.request.call_count == 1
+    assert c._new_session.call_count == 1
+
+
+def test_connection_error_is_retried_on_a_fresh_session():
+    dropped, fresh = MagicMock(), MagicMock()
+    dropped.request.side_effect = requests.ConnectionError("connection aborted")
+    fresh.request.return_value = _resp(body={"statusCode": 1})
+    c = _client(dropped, fresh)
+
+    ok, _ = c.delete_user("EMP1")
+
+    assert ok is True
+    assert c._new_session.call_count == 1
+    assert c._session is fresh
+
+
+def test_successful_request_keeps_the_session():
+    c = _client()
+    c._session.request.return_value = _resp(body={"statusCode": 1})
+
+    ok, _ = c.delete_user("EMP1")
+
+    assert ok is True
+    assert c._new_session.call_count == 0
+
+
+def test_test_connection_recovers_from_stale_nonce():
+    stale, fresh = MagicMock(), MagicMock()
+    stale.request.return_value = _resp(401, body=AUTH_REJECTED)
+    fresh.request.return_value = _resp(body={"statusCode": 1})
+    c = _client(stale, fresh)
+
+    assert c.test_connection() == "ok"
+
+
+def test_test_connection_reports_auth_failed_on_real_bad_credentials():
+    stale, fresh = MagicMock(), MagicMock()
+    stale.request.return_value = _resp(401, text="unauthorized")
+    fresh.request.return_value = _resp(401, text="unauthorized")
+    c = _client(stale, fresh)
+
+    assert c.test_connection() == "auth_failed"
 
 
 # ---------------------------------------------------------------------------

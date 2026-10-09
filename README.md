@@ -190,6 +190,27 @@ Wenn ein Benutzer zwar angelegt wird, aber keinen Zutritt erhält, liegt es oft
 an der Zeitzone der Gültigkeit. Die Integration sendet die Gültigkeit daher mit
 `timeType: local`, damit das Gerät sie nicht als UTC interpretiert.
 
+### Nach einiger Laufzeit schlägt alles mit HTTP 401 fehl
+
+Symptom (bis v1.2.0): Nach Stunden oder Tagen beantwortet das Gerät **jede**
+Anfrage – Benutzerliste, Ereignisse, Anlegen, Löschen, Deaktivieren – mit
+
+```
+HTTP 401: {"statusCode":4,"statusString":"Invalid Operation",
+           "subStatusCode":"invalidOperation","errorCode":1073741830}
+```
+
+Ein Neuladen der Integration half, danach lief es wieder. Ursache: Das Gerät
+akzeptiert die einmal ausgehandelte Digest-Nonce irgendwann nicht mehr,
+`requests` sendet sie aber weiter – die Session bleibt dauerhaft kaputt.
+
+Seit **v1.2.1** verwirft der Client bei einem 401 die Session, baut den
+Digest-Handshake neu auf und wiederholt die Anfrage genau einmal. Dasselbe
+passiert bei einem `ConnectionError` (das Gerät schließt Keep-Alive-Verbindungen
+recht schnell). Bleibt es auch nach dem Reset bei 401, sind die Zugangsdaten
+tatsächlich falsch – das Log sagt dann `authentication rejected by device after
+session reset – check username/password`.
+
 ## Unterstützte Geräte
 
 Getestet mit Hikvision Zutrittskontrollgeräten, die die ISAPI-Schnittstelle unterstützen:
