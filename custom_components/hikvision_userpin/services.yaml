@@ -90,8 +90,11 @@ extend_user:
             - "forever"
     begin_date:
       name: Begin Date
-      description: Current validity start date (YYYY-MM-DD).
-      required: true
+      description: >-
+        Current validity start date (YYYY-MM-DD). Optional - it is kept as the
+        new start when it already lies in the past, otherwise it is clamped so
+        the window never ends before it begins.
+      required: false
       selector:
         date:
     current_end:
@@ -103,7 +106,9 @@ extend_user:
 
 deactivate_user:
   name: Deactivate User
-  description: Deactivate a user by setting the end date to yesterday.
+  description: >-
+    Deactivate a user by moving the validity window into the past
+    (ends yesterday).
   fields:
     config_entry_id:
       name: Config Entry ID
@@ -119,7 +124,10 @@ deactivate_user:
         text:
     begin_date:
       name: Begin Date
-      description: Current validity start date (YYYY-MM-DD).
-      required: true
+      description: >-
+        Current validity start date (YYYY-MM-DD). Optional - it is kept as the
+        new start when it already lies in the past, otherwise it is clamped so
+        the window never ends before it begins.
+      required: false
       selector:
         date:

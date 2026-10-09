@@ -190,6 +190,18 @@ Wenn ein Benutzer zwar angelegt wird, aber keinen Zutritt erhält, liegt es oft
 an der Zeitzone der Gültigkeit. Die Integration sendet die Gültigkeit daher mit
 `timeType: local`, damit das Gerät sie nicht als UTC interpretiert.
 
+### Deaktivieren schlägt bei heute angelegten Benutzern fehl
+
+Symptom (bis v1.2.1): Das Deaktivieren eines Benutzers, dessen Gültigkeit heute
+oder später beginnt, wurde vom Gerät mit `statusCode=4 / invalidOperation`
+abgelehnt. Grund: Das Ende wurde pauschal auf *gestern* gesetzt, der
+ursprüngliche Beginn blieb stehen – das Fenster endete also vor seinem Anfang.
+
+Seit **v1.2.2** wird der Beginn auf das Ende begrenzt (`deactivation_window()`
+in `client.py`). Liegt der ursprüngliche Beginn bereits in der Vergangenheit,
+bleibt er erhalten; andernfalls werden Beginn und Ende auf gestern gesetzt. Das
+Feld `begin_date` des Service `deactivate_user` ist damit optional.
+
 ### Nach einiger Laufzeit schlägt alles mit HTTP 401 fehl
 
 Symptom (bis v1.2.0): Nach Stunden oder Tagen beantwortet das Gerät **jede**

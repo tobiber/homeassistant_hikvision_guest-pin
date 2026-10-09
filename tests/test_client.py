@@ -19,6 +19,7 @@ import pytest
 from hikvision_userpin.client import (  # noqa: E402
     HikvisionClient,
     compute_end_date,
+    deactivation_window,
     parse_date,
     parse_event_codes,
 )
@@ -232,6 +233,43 @@ def test_compute_end_date_inclusive(dur, expected_days):
     start = datetime(2026, 1, 1)
     end = compute_end_date(start, dur)
     assert (end - start).days == expected_days
+
+
+# ---------------------------------------------------------------------------
+# Deactivation window — the end must never fall before the begin, or the
+# device rejects the Modify for anyone whose validity starts today or later.
+# ---------------------------------------------------------------------------
+
+TODAY = datetime(2026, 10, 9)
+
+
+def test_deactivation_window_keeps_a_past_begin():
+    begin, end = deactivation_window("2026-10-01", today=TODAY)
+    assert (begin, end) == ("2026-10-01", "2026-10-08")
+
+
+def test_deactivation_window_clamps_a_begin_in_the_future():
+    """A guest created today must not end up with end < begin."""
+    begin, end = deactivation_window("2026-10-20", today=TODAY)
+    assert (begin, end) == ("2026-10-08", "2026-10-08")
+
+
+def test_deactivation_window_clamps_a_begin_of_today():
+    begin, end = deactivation_window("2026-10-09", today=TODAY)
+    assert begin == end == "2026-10-08"
+
+
+@pytest.mark.parametrize("value", [None, "", "not-a-date"])
+def test_deactivation_window_without_usable_begin(value):
+    begin, end = deactivation_window(value, today=TODAY)
+    assert begin == end == "2026-10-08"
+
+
+def test_deactivation_window_never_ends_before_it_begins():
+    for value in ("2020-01-01", "2026-10-08", "2026-10-09", "2099-12-31", None):
+        begin, end = deactivation_window(value, today=TODAY)
+        assert parse_date(begin) <= parse_date(end)
+        assert parse_date(end) < TODAY
 
 
 def test_parse_date_formats():

@@ -102,6 +102,38 @@ def compute_end_date(
     return start + timedelta(days=6)
 
 
+def deactivation_window(
+    begin_date: Optional[str] = None, today: Optional[datetime] = None
+) -> tuple[str, str]:
+    """Return a (begin, end) date pair that marks a user as expired.
+
+    The end is yesterday, so the validity window lies completely in the past.
+    The begin must never be *after* the end: the device rejects such a Modify,
+    which would hit every user whose validity starts today or later (e.g. a
+    guest created the same day). We therefore clamp the original begin to the
+    end date and keep it otherwise, so the original start stays visible in the
+    user list. An unknown or unparseable begin falls back to the end date.
+    """
+    ref = today or datetime.today()
+    end = (ref - timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+    begin = end
+    if begin_date:
+        try:
+            parsed = parse_date(begin_date)
+        except ValueError:
+            _LOGGER.warning(
+                "Unparseable begin date %r for deactivation, using %s",
+                begin_date, end.date(),
+            )
+        else:
+            begin = min(parsed, end)
+
+    return begin.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+
+
 def generate_card_id(length: int = 12) -> str:
     """Generate a random alphanumeric card ID."""
     alphabet = string.ascii_uppercase + string.digits

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 import voluptuous as vol
@@ -15,6 +15,7 @@ import homeassistant.helpers.config_validation as cv
 from .client import (
     HikvisionClient,
     compute_end_date,
+    deactivation_window,
     generate_card_id,
     parse_date,
 )
@@ -60,7 +61,7 @@ DEACTIVATE_USER_SCHEMA = vol.Schema(
     {
         vol.Required("config_entry_id"): cv.string,
         vol.Required("employee_no"): cv.string,
-        vol.Required("begin_date"): cv.string,
+        vol.Optional("begin_date"): cv.string,
     }
 )
 
@@ -184,18 +185,19 @@ async def async_handle_deactivate_user(hass: HomeAssistant, call: ServiceCall) -
     coordinator: HikvisionCoordinator = entry_data["coordinator"]
 
     employee_no = data["employee_no"]
-    begin_date = data["begin_date"]
-    yesterday = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+    begin, end = deactivation_window(data.get("begin_date"))
 
     success, detail = await hass.async_add_executor_job(
-        client.update_validity, employee_no, begin_date, yesterday,
+        client.update_validity, employee_no, begin, end,
     )
     if not success:
         raise HomeAssistantError(
             f"Benutzer {employee_no} konnte nicht deaktiviert werden ({detail})"
         )
 
-    _LOGGER.info("Deactivated user %s (end set to %s)", employee_no, yesterday)
+    _LOGGER.info(
+        "Deactivated user %s (validity set to %s - %s)", employee_no, begin, end,
+    )
     await coordinator.async_request_refresh()
 
 
