@@ -30,13 +30,14 @@ from .services import async_register_services, async_unregister_services
 _LOGGER = logging.getLogger(__name__)
 
 CARD_JS_URL = f"/{DOMAIN}/hikvision-userpin-card.js"
+PANEL_JS_URL = f"/{DOMAIN}/hikvision-userpin-panel.js"
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Register the Lovelace card JS resource (runs before config entries)."""
-    card_js_path = os.path.join(
-        os.path.dirname(__file__), "www", "hikvision-userpin-card.js"
-    )
+    www_dir = os.path.join(os.path.dirname(__file__), "www")
+    card_js_path = os.path.join(www_dir, "hikvision-userpin-card.js")
+    panel_js_path = os.path.join(www_dir, "hikvision-userpin-panel.js")
 
     if not os.path.isfile(card_js_path):
         _LOGGER.error(
@@ -46,9 +47,17 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
         )
         return True
 
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(CARD_JS_URL, card_js_path, False)]
-    )
+    static_paths = [StaticPathConfig(CARD_JS_URL, card_js_path, False)]
+    if os.path.isfile(panel_js_path):
+        static_paths.append(StaticPathConfig(PANEL_JS_URL, panel_js_path, False))
+    else:
+        _LOGGER.error(
+            "Sidebar panel JS not found at %s – "
+            "make sure the www/ directory is deployed",
+            panel_js_path,
+        )
+
+    await hass.http.async_register_static_paths(static_paths)
     add_extra_js_url(hass, CARD_JS_URL)
     _LOGGER.info(
         "Registered Hikvision UserPin card JS: %s -> %s",
@@ -137,7 +146,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register services and sidebar panel (only once, on first entry)
     if len(hass.data[DOMAIN]) == 1:
         async_register_services(hass)
-        async_register_panel(hass)
+        await async_register_panel(hass)
 
     # Listen for option updates
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))

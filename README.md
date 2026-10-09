@@ -7,7 +7,7 @@ Home Assistant Custom Integration zur Verwaltung von Benutzern und Zugangskarten
 - Benutzer anlegen, löschen und Gültigkeit verlängern
 - QR-Code Generierung für Zugangskarten
 - Zwei native Lovelace Dashboard Cards (Benutzer + Ereignisse)
-- Iframe-Sidebar-Panel als Alternative
+- Natives Sidebar-Panel (nutzt die HA-Anmeldung)
 - PIN-Schutz für sensible Aktionen (Löschen, QR, Verlängern)
 - Geschützte Benutzer (nicht löschbar)
 - HA Services für Automationen
@@ -159,7 +159,9 @@ data:
 
 ## Sidebar-Panel
 
-Neben den Lovelace Cards wird automatisch ein Sidebar-Panel unter **Hikvision UserPin** registriert. Dieses zeigt eine iframe-basierte Verwaltungsoberfläche mit denselben Funktionen.
+Neben den Lovelace Cards wird automatisch ein natives Sidebar-Panel unter **Hikvision UserPin** registriert. Es bettet dieselben beiden Lovelace Cards (Benutzer + Ereignisse) ein – es gibt also keine zweite Oberfläche und keinen iframe mehr.
+
+Alle Aufrufe des Panels laufen über die normale Home-Assistant-Anmeldung: Daten werden per `hass.callApi` (mit Bearer-Token) geholt, Aktionen per `hass.callService` ausgeführt. Ohne gültige HA-Session ist kein Endpunkt der Integration erreichbar.
 
 ## Fehlerbehebung
 
@@ -206,17 +208,22 @@ custom_components/hikvision_userpin/
 ├── const.py             # Konstanten
 ├── coordinator.py       # DataUpdateCoordinator
 ├── manifest.json        # Integration Manifest
-├── panel.py             # HTTP Views & Panel
+├── panel.py             # Auth-geschützte API-Views & Sidebar-Panel
 ├── sensor.py            # Sensor-Entitäten
 ├── services.py          # Service-Handler
 ├── services.yaml        # Service-Definitionen
 ├── strings.json         # Englische Strings
-├── templates/
-│   ├── index.html       # Panel Hauptseite
-│   ├── qr.html          # QR-Code Seite
-│   └── extend.html      # Verlängerungsformular
 ├── translations/
 │   └── de.json          # Deutsche Übersetzung
 └── www/
-    └── hikvision-userpin-card.js  # Lovelace Cards
+    ├── hikvision-userpin-card.js   # Lovelace Cards
+    └── hikvision-userpin-panel.js  # Sidebar-Panel (bettet die Cards ein)
 ```
+
+## Sicherheit
+
+> **Wichtig für Nutzer von Version 1.1.0 und älter**
+>
+> Bis einschließlich 1.1.0 waren die Panel-Endpunkte (`/api/hikvision_userpin/...`) ohne Login erreichbar (`requires_auth = False`). Bei einer öffentlich erreichbaren Home-Assistant-Instanz konnten dadurch Unbefugte Benutzer samt Karten-IDs auslesen sowie Zugänge anlegen, löschen oder verlängern.
+>
+> Ab Version 1.2.0 erfordern alle Endpunkte eine gültige HA-Authentifizierung. **Nach dem Update sollten alle Karten-IDs/PINs geprüft werden, die über eine betroffene Version vergeben wurden – im Zweifel löschen und neu vergeben.**

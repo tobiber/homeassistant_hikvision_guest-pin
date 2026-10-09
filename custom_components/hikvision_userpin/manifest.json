@@ -1,11 +1,11 @@
 {
   "domain": "hikvision_userpin",
   "name": "Hikvision User & PIN Control",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "documentation": "https://github.com/tobiber/homeassistant_hikvision_guest-pin",
   "issue_tracker": "https://github.com/tobiber/homeassistant_hikvision_guest-pin/issues",
   "requirements": ["qrcode[pil]==7.4.2"],
-  "dependencies": ["frontend", "http", "lovelace"],
+  "dependencies": ["frontend", "http", "lovelace", "panel_custom"],
   "codeowners": ["@tobiber"],
   "config_flow": true,
   "integration_type": "device",
